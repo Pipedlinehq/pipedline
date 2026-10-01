@@ -35,7 +35,7 @@ pnpm gates                        # all of the above, strict
 
 No Docker and no system Postgres: tests and dev use an embedded Postgres 18.
 
-## The rules (each has a gate or a test behind it)
+## The rules (most have a gate or a test behind them; 3, 4, 5, 12 and 13 rely on review)
 
 1. **Every read and write of tenant data happens inside `app.tenant(orgId, principal, fn)`.**
    That transaction runs as role `app_tenant` with row-level security on. The org comes from

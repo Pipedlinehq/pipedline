@@ -8,7 +8,7 @@ machine against a real Postgres and, for the browser suite, the production build
 
 | Check | Result | How to run |
 |---|---|---|
-| Service tests (real Postgres, seeded two-org fixture) | 744 pass, 83 files, strict seeding | `pnpm test` |
+| Service tests (real Postgres, seeded two-org fixture) | 790 pass, 87 files, strict seeding | `pnpm test` |
 | Browser end-to-end (production build, headless Chromium, database read back) | 135 pass, 33 files (includes an automated accessibility pass) | `pnpm e2e` |
 | Typecheck, module boundaries, no tenant branching | clean | `pnpm gates` |
 
@@ -21,7 +21,17 @@ analytics against an independent oracle; website, onboarding to go-live, platfor
 
 Since 2026-10-01 the suite also covers self-serve start and the 17 setup tools: a scripted assistant
 takes a venue from an unseen email address to live through the MCP server alone
-(`packages/modules/test/setup/`). No page in the web app calls self-serve start yet.
+(`packages/modules/test/setup/`). A minimal `/start` page calls it; it is off unless
+`ROS_SELF_SERVE=1` and has no browser test.
+
+Self-hosting (`docs/SELF_HOSTING.md`): every step was run against a new, empty Postgres 18 as a
+non-superuser, with web and worker as separate processes, in trial mode (simulated providers):
+sign-in, self-serve start, an assistant connecting and calling `setup_status`. In live mode it
+was verified only as far as start-up and that the development routes return 404; nothing past
+the first real email has been run. Containers, proxy, TLS, custom domains and backup are not covered.
+
+Plugins (`docs/PLUGINS.md`): the `specials` module was written by following the guide. A plugin
+must still be merged into this repository; there is no outside loading, catalogue or registry.
 
 ## Simulated only (never run against the real service)
 

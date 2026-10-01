@@ -1534,6 +1534,22 @@ export interface SideEffects {
   updated_at: Generated<Timestamp>;
 }
 
+export interface Specials {
+  created_at: Generated<Timestamp>;
+  created_by_id: string | null;
+  created_by_kind: string;
+  description: string | null;
+  ended_at: Timestamp | null;
+  ends_on: string;
+  id: Generated<string>;
+  name: string;
+  org_id: string;
+  price_cents: number;
+  starts_on: string;
+  updated_at: Generated<Timestamp>;
+  venue_id: string;
+}
+
 export interface Staff {
   created_at: Generated<Timestamp>;
   email: string;
@@ -1846,6 +1862,7 @@ export interface DB {
   sending_identities: SendingIdentities;
   sessions: Sessions;
   side_effects: SideEffects;
+  specials: Specials;
   staff: Staff;
   staff_venues: StaffVenues;
   support_access: SupportAccess;

@@ -17,6 +17,7 @@ export * as loyalty from './loyalty/index';
 export * as offers from './offers/index';
 export * as campaigns from './campaigns/index';
 export * as reviews from './reviews/index';
+export * as specials from './specials/index';
 export * as website from './website/index';
 export * as hub from './hub/index';
 export * as analytics from './analytics/index';

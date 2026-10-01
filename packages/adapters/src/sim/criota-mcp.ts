@@ -13,7 +13,7 @@ import {
 /**
  * A simulated Criota MCP server: the venue side of the real one, as an assistant (or our
  * gateway) meets it. Tool names and titles are the venue-side, first-tier entries of Criota's
- * catalogue (`Criota/apps/api/src/mcp/catalogue.ts`); descriptions are the ones its server puts
+ * catalogue; descriptions are the ones its server puts
  * on the wire (`bindings.ts`). It is a real MCP server answering in process, so the real HTTP
  * adapter is what talks to it in tests.
  *

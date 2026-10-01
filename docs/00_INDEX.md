@@ -20,6 +20,9 @@ incumbent tools.
 | When you are… | Read |
 |---|---|
 | Orienting to the whole thing | this file, then `ARCHITECTURE.md` |
+| Understanding where this is going | `PIPEDLINE.md` — the direction of record |
+| Running it yourself | `SELF_HOSTING.md` |
+| Writing a plugin | `PLUGINS.md` |
 | Making any schema decision | `SCHEMA.md` — the org/venue/customer/transaction spine |
 | Deciding how tenants get isolated, themed, routed, cached | `ARCHITECTURE.md` |
 | Adding or scoping a module | `MODULES.md` → then `modules/<name>.md` |

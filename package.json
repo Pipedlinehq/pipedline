@@ -12,7 +12,6 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "db:types": "tsx scripts/db-types.ts",
-    "db:check": "tsx scripts/db-check.ts",
     "check:modules": "tsx scripts/check-module-boundaries.ts",
     "check:tenant-branching": "tsx scripts/check-tenant-branching.ts",
     "dev:db": "tsx scripts/dev-db.ts",
@@ -21,6 +20,12 @@
     "e2e": "vitest run --config vitest.e2e.config.ts",
     "dev:stack": "tsx scripts/dev-stack.ts",
     "smoke:live": "tsx scripts/smoke-live.ts",
+    "check:config": "tsx scripts/smoke-live.ts --config",
+    "db:migrate": "tsx scripts/db-migrate.ts",
+    "bootstrap:admin": "tsx scripts/bootstrap-admin.ts",
+    "build": "pnpm --filter @ros/web build",
+    "start:web": "tsx scripts/start-web.ts",
+    "start:worker": "tsx scripts/start-worker.ts",
     "e2e:dev": "E2E_MODE=dev vitest run --config vitest.e2e.config.ts"
   },
   "devDependencies": {

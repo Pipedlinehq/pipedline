@@ -78,4 +78,35 @@ export async function migrate(pool: pg.Pool, dir: string): Promise<MigrationResu
   }
 }
 
+export interface MigrationStatus {
+  /** Files on disk that the database has, unchanged. */
+  applied: string[];
+  /** Files on disk the database has not had yet, in the order they would run. */
+  pending: string[];
+  /** Files whose contents differ from what was applied: `migrate` refuses these. */
+  changed: string[];
+  /** Recorded in the database but not on disk: the code is older than the database. */
+  unknown: string[];
+}
+
+/**
+ * What `migrate` would do, without doing it: reads only. For a deployment's start-up and
+ * configuration checks. A database that has never been migrated reports every file as pending.
+ */
+export async function migrationStatus(pool: pg.Pool, dir: string): Promise<MigrationStatus> {
+  const files = (await readdir(dir)).filter((f) => f.endsWith('.sql')).sort();
+  const has = await pool.query<{ t: string | null }>("select to_regclass('public.schema_migrations')::text as t");
+  const done = new Map<string, string>(
+    has.rows[0]?.t ? (await pool.query<{ name: string; checksum: string }>('select name, checksum from public.schema_migrations')).rows.map((r) => [r.name, r.checksum]) : [],
+  );
+  const out: MigrationStatus = { applied: [], pending: [], changed: [], unknown: [...done.keys()].filter((n) => !files.includes(n)).sort() };
+  for (const file of files) {
+    const prior = done.get(file);
+    if (!prior) out.pending.push(file);
+    else if (prior === createHash('sha256').update(await readFile(path.join(dir, file), 'utf8')).digest('hex')) out.applied.push(file);
+    else out.changed.push(file);
+  }
+  return out;
+}
+
 export { sql };

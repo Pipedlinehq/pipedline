@@ -4,6 +4,10 @@
  * dispatched, and no secret is printed.
  *
  *   pnpm smoke:live            reads the environment (and .env in the repo root, if present)
+ *   pnpm check:config          the same script with --config: no provider is called. It says, in
+ *                              plain words, which variables are missing or inconsistent for the
+ *                              mode chosen (packages/runtime/src/check.ts), then reads the database:
+ *                              reachable, migrated, usable by this user, has a platform admin.
  *
  * Exit code 0 when nothing failed, 1 when any check failed. A skipped check is not a failure:
  * it means the provider is not configured, or cannot be checked without a venue's own
@@ -18,7 +22,9 @@ import { fileURLToPath } from 'node:url';
 import pg from 'pg';
 import { anthropicCheckKey, createHttpRemoteMcpAdapter, createSquareAdapter, resendListDomains, twilioGetAccount, vercelListProjectDomains } from '@ros/adapters';
 import type { ConnectionHandle } from '@ros/core';
+import { checkDeployment, formatDeploymentCheck } from '../packages/runtime/src/check';
 import { type Env, PROVIDERS, type ProviderId, adapterMode, liveRequirements, readProviderEnv } from '../packages/runtime/src/env';
+import { inspectDatabase } from './db-migrate';
 
 export interface SmokeResult {
   provider: string;
@@ -162,6 +168,17 @@ if (invokedDirectly) {
   const dotenv = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '.env');
   // Variables already in the environment win over the file.
   if (existsSync(dotenv)) process.loadEnvFile(dotenv);
+  if (process.argv.includes('--config')) {
+    const check = checkDeployment(process.env);
+    if (process.env.DATABASE_URL && /^postgres(ql)?:\/\//.test(process.env.DATABASE_URL.trim())) {
+      const database = await inspectDatabase(process.env.DATABASE_URL.trim());
+      check.summary.push(...database.notes);
+      check.errors.push(...database.problems);
+    }
+    console.log(formatDeploymentCheck(check));
+    console.log('Nothing was changed and no provider was called. To check the credentials themselves: pnpm smoke:live');
+    process.exit(check.errors.length ? 1 : 0);
+  }
   const results = await runSmoke(process.env);
   console.log(formatSmoke(results));
   process.exit(results.some((r) => r.status === 'fail') ? 1 : 0);

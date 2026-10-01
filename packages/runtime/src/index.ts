@@ -8,6 +8,7 @@ import { registerLiveAdapters, unconfiguredLlm, unconfiguredStorage } from './li
 
 export * from './env';
 export * from './live';
+export * from './check';
 
 /**
  * The running application, built once per process from the environment.

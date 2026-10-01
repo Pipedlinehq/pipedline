@@ -13,6 +13,8 @@ has never run a real venue and has never been deployed. Read `docs/STATUS.md` be
 anything.
 
 - Direction: `docs/PIPEDLINE.md`
+- Running it yourself: `docs/SELF_HOSTING.md`
+- Writing a plugin: `docs/PLUGINS.md`
 - Design: `docs/00_INDEX.md`
 - Working in the code: `CLAUDE.md`
 - What is verified and what is not: `docs/STATUS.md`

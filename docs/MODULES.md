@@ -24,6 +24,7 @@
 | Loyalty | `loyalty` | 3 | ⬜ | identity, ledger, comms | `modules/loyalty.md` |
 | Lifecycle campaigns | `campaigns` | 4 | ⬜ | identity, comms, events | later |
 | Reviews & reputation | `reviews` | 4 | ⬜ | identity | later |
+| Specials board (the worked example in `PLUGINS.md`) | `specials` | — | built | — | `modules/specials.md` |
 | Kitchen display (full KDS) | `kds` | deferred | ⬜ | ordering | `modules/kds.md` |
 | Dine-in bookings | `bookings` | deferred | ⬜ | identity, comms | `modules/bookings.md` |
 | POS / order entry | `pos` | deferred | ⬜ | kds, ledger, bookings | `modules/pos.md` |
