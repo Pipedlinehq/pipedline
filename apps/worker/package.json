@@ -1,0 +1,14 @@
+{
+  "name": "@ros/worker",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "tsx src/index.ts",
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@ros/core": "workspace:*",
+    "@ros/runtime": "workspace:*"
+  }
+}

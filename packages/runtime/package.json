@@ -1,0 +1,16 @@
+{
+  "name": "@ros/runtime",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": { ".": "./src/index.ts", "./*": "./src/*.ts" },
+  "scripts": { "typecheck": "tsc -p tsconfig.json" },
+  "dependencies": {
+    "@ros/adapters": "workspace:*",
+    "@ros/core": "workspace:*",
+    "@ros/modules": "workspace:*",
+    "kysely": "^0.29.6",
+    "pg": "^8.23.0",
+    "zod": "^4.6.5"
+  }
+}

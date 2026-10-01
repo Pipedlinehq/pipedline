@@ -1,0 +1,26 @@
+{
+  "name": "@ros/modules",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./*": "./src/*/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/server": "2.2.0",
+    "@ros/core": "workspace:*",
+    "kysely": "^0.29.6",
+    "zod": "^4.6.5"
+  },
+  "devDependencies": {
+    "@modelcontextprotocol/client": "2.2.0",
+    "@ros/adapters": "workspace:*",
+    "@ros/fixtures": "workspace:*",
+    "@ros/testkit": "workspace:*",
+    "vitest": "^5.0.3"
+  }
+}

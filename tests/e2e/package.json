@@ -1,0 +1,21 @@
+{
+  "name": "@ros/e2e",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@axe-core/playwright": "^4.13.0",
+    "@ros/core": "workspace:*",
+    "@ros/fixtures": "workspace:*",
+    "@ros/modules": "workspace:*",
+    "@ros/runtime": "workspace:*",
+    "@ros/testkit": "workspace:*",
+    "kysely": "^0.29.6",
+    "pg": "^8.23.0",
+    "playwright": "^1.63.0",
+    "vitest": "^5.0.3"
+  }
+}

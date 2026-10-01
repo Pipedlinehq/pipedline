@@ -1,0 +1,52 @@
+{
+  "name": "restaurant-os",
+  "private": true,
+  "license": "AGPL-3.0-only",
+  "type": "module",
+  "packageManager": "pnpm@10.28.2",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "typecheck": "pnpm -r --no-bail typecheck",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "db:types": "tsx scripts/db-types.ts",
+    "db:check": "tsx scripts/db-check.ts",
+    "check:modules": "tsx scripts/check-module-boundaries.ts",
+    "check:tenant-branching": "tsx scripts/check-tenant-branching.ts",
+    "dev:db": "tsx scripts/dev-db.ts",
+    "seed": "tsx scripts/seed.ts",
+    "gates": "pnpm typecheck && pnpm check:modules && pnpm check:tenant-branching && ROS_STRICT_SEEDERS=1 vitest run",
+    "e2e": "vitest run --config vitest.e2e.config.ts",
+    "dev:stack": "tsx scripts/dev-stack.ts",
+    "smoke:live": "tsx scripts/smoke-live.ts",
+    "e2e:dev": "E2E_MODE=dev vitest run --config vitest.e2e.config.ts"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "@types/pg": "^8.11.0",
+    "embedded-postgres": "18.4.0-beta.17",
+    "kysely-codegen": "^0.20.0",
+    "tsx": "^4.23.0",
+    "typescript": "^7.0.2",
+    "vitest": "^5.0.3",
+    "@ros/core": "workspace:*",
+    "@ros/modules": "workspace:*",
+    "@ros/adapters": "workspace:*",
+    "@ros/testkit": "workspace:*",
+    "@ros/fixtures": "workspace:*",
+    "kysely": "^0.29.6",
+    "pg": "^8.23.0",
+    "zod": "^4.6.5",
+    "@ros/runtime": "workspace:*"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "@embedded-postgres/linux-x64",
+      "embedded-postgres",
+      "esbuild",
+      "sharp"
+    ]
+  }
+}

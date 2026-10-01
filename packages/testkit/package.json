@@ -1,0 +1,25 @@
+{
+  "name": "@ros/testkit",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./*": "./src/*.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@ros/core": "workspace:*",
+    "embedded-postgres": "18.4.0-beta.17",
+    "kysely": "^0.29.6",
+    "pg": "^8.23.0",
+    "@ros/modules": "workspace:*",
+    "@ros/adapters": "workspace:*",
+    "@ros/fixtures": "workspace:*"
+  },
+  "devDependencies": {
+    "vitest": "^5.0.3"
+  }
+}

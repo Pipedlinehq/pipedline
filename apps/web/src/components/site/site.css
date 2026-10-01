@@ -1,0 +1,266 @@
+/*
+ * Venue sites. One stylesheet for every venue: the look comes from the brand tokens, emitted by
+ * the website module as CSS custom properties (--brand-*) on :root, plus a few colours derived
+ * from them on the site wrapper (--s-*) that are guaranteed readable on the page background.
+ * Nothing here is per tenant.
+ */
+
+/* In the components layer, so Tailwind utilities on an element win over these defaults. */
+@layer components {
+
+
+.site {
+  --s-gap: calc(var(--brand-space-unit, 4px) * 4 * var(--brand-density, 1));
+  --s-section: calc(var(--brand-section-y, 96px) * var(--brand-density, 1));
+  font-family: var(--brand-font-body);
+  font-size: var(--brand-body-size, 16px);
+  line-height: var(--brand-body-leading, 1.6);
+  font-weight: var(--brand-body-weight, 400);
+  color: var(--brand-color-text);
+  background: var(--brand-color-surface);
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  -webkit-font-smoothing: antialiased;
+}
+.site main {
+  flex: 1 0 auto;
+}
+@media (max-width: 640px) {
+  .site {
+    --s-section: calc(var(--brand-section-y, 96px) * 0.5 * var(--brand-density, 1));
+  }
+}
+
+.site h1,
+.site h2,
+.site h3,
+.site .s-heading {
+  font-family: var(--brand-font-heading);
+  font-weight: var(--brand-heading-weight, 700);
+  letter-spacing: var(--brand-heading-tracking, 0);
+  line-height: 1.15;
+  text-wrap: balance;
+}
+.site h1 {
+  font-size: clamp(2rem, calc(var(--brand-body-size) * var(--brand-type-scale) * var(--brand-type-scale) * var(--brand-type-scale) * var(--brand-type-scale)), 4.5rem);
+}
+.site h2 {
+  font-size: clamp(1.5rem, calc(var(--brand-body-size) * var(--brand-type-scale) * var(--brand-type-scale) * var(--brand-type-scale)), 3rem);
+}
+.site h3 {
+  font-size: calc(var(--brand-body-size) * var(--brand-type-scale));
+}
+.site .s-display {
+  font-size: clamp(2.5rem, 8vw, 6rem);
+  line-height: 1.02;
+}
+
+:where(.site) a {
+  color: inherit;
+}
+.site .s-link {
+  color: var(--s-link);
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+}
+.site .s-muted {
+  color: var(--s-muted);
+}
+.site .s-alt {
+  background: var(--brand-color-surface-alt);
+}
+
+/* Focus is always visible, in a colour that reads on the background it sits on. */
+.site :focus-visible {
+  outline: 3px solid var(--brand-color-text);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+.site .s-on-dark :focus-visible,
+.site .s-primary-bg :focus-visible {
+  outline-color: #ffffff;
+}
+
+.s-skip {
+  position: absolute;
+  left: 0.75rem;
+  top: -4rem;
+  z-index: 60;
+  padding: 0.75rem 1rem;
+  background: var(--brand-color-text);
+  color: var(--brand-color-surface);
+  border-radius: var(--brand-radius-md);
+}
+.s-skip:focus {
+  top: 0.75rem;
+}
+
+.s-btn,
+.s-btn-outline,
+.s-btn-quiet {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  min-height: 2.75rem;
+  padding: 0.5rem 1.25rem;
+  border-radius: var(--brand-radius-md);
+  font-weight: var(--brand-body-weight-strong, 600);
+  text-decoration: none;
+  cursor: pointer;
+  white-space: nowrap;
+  border: 2px solid transparent;
+  transition: filter 120ms ease;
+}
+.s-btn {
+  background: var(--brand-color-primary);
+  color: var(--brand-color-primary-contrast);
+  border-color: var(--brand-color-primary);
+}
+.s-btn:hover {
+  filter: brightness(0.92);
+}
+.s-btn-outline {
+  background: transparent;
+  color: var(--brand-color-text);
+  border-color: var(--s-edge);
+}
+.s-btn-outline:hover {
+  background: var(--brand-color-surface-alt);
+}
+.s-btn-quiet {
+  background: transparent;
+  color: var(--s-link);
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+  padding-inline: 0.5rem;
+}
+.s-btn[disabled],
+.s-btn-outline[disabled],
+.s-btn-quiet[disabled],
+.s-btn[aria-disabled='true'] {
+  opacity: 0.55;
+  cursor: not-allowed;
+  filter: none;
+}
+.s-on-dark .s-btn-outline {
+  color: #ffffff;
+  border-color: #ffffff;
+}
+
+.s-card {
+  background: var(--brand-color-surface);
+  border: 1px solid var(--brand-color-border);
+  border-radius: var(--brand-radius-lg);
+}
+.s-rule {
+  border-color: var(--brand-color-border);
+}
+
+.s-input,
+.s-select,
+.s-textarea {
+  display: block;
+  width: 100%;
+  min-height: 2.75rem;
+  padding: 0.5rem 0.75rem;
+  font: inherit;
+  color: var(--brand-color-text);
+  background: var(--brand-color-surface);
+  border: 1.5px solid var(--s-edge);
+  border-radius: var(--brand-radius-md);
+}
+.s-textarea {
+  min-height: 5rem;
+}
+.s-input[aria-invalid='true'] {
+  border-color: var(--brand-color-error);
+  border-width: 2px;
+}
+.s-check {
+  width: 1.25rem;
+  height: 1.25rem;
+  flex: none;
+  margin-top: 0.15rem;
+  accent-color: var(--brand-color-primary);
+}
+
+.s-img {
+  width: 100%;
+  aspect-ratio: var(--brand-image-ratio, 4 / 3);
+  object-fit: cover;
+  filter: var(--brand-image-filter, none);
+  border-radius: var(--brand-image-radius, 0);
+}
+
+.s-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.125rem 0.625rem;
+  border: 1px solid var(--s-edge);
+  border-radius: var(--brand-radius-pill, 999px);
+  font-size: 0.8125rem;
+  line-height: 1.5;
+}
+
+.s-notice {
+  border-left: 4px solid var(--brand-color-text);
+  background: var(--brand-color-surface-alt);
+  padding: 0.75rem 1rem;
+  border-radius: var(--brand-radius-sm);
+}
+.s-notice[data-tone='error'] {
+  border-left-color: var(--brand-color-error);
+}
+.s-notice[data-tone='success'] {
+  border-left-color: var(--brand-color-success);
+}
+
+.s-primary-bg {
+  background: var(--brand-color-primary);
+  color: var(--brand-color-primary-contrast);
+}
+.s-primary-bg .s-btn {
+  background: var(--brand-color-primary-contrast);
+  color: var(--brand-color-primary);
+  border-color: var(--brand-color-primary-contrast);
+}
+
+.s-hero-shade {
+  background: linear-gradient(180deg, rgb(0 0 0 / 0.15) 0%, rgb(0 0 0 / 0.55) 55%, rgb(0 0 0 / 0.72) 100%);
+}
+
+.s-dropcap::first-letter {
+  float: left;
+  font-family: var(--brand-font-heading);
+  font-size: 3.4em;
+  line-height: 0.9;
+  padding: 0.05em 0.1em 0 0;
+}
+
+.s-tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .site * {
+    scroll-behavior: auto !important;
+  }
+}
+html:has(.site) {
+  scroll-behavior: smooth;
+  scroll-padding-top: 5rem;
+}
+
+}
+
+/*
+ * A page with an "hours and location" section already shows the week's hours in full: the
+ * footer does not say them again. The footer belongs to the layout and cannot know what the page
+ * drew, so the page's own markup decides. A browser without :has() shows both, as before.
+ */
+.site:has([data-block='hours-location']) .s-footer-hours {
+  display: none;
+}
