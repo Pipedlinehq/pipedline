@@ -115,7 +115,7 @@ export function createKlaviyoAdapter(opts: KlaviyoOptions = {}): EspAdapter {
               },
             ],
           },
-          custom_source: 'Restaurant OS',
+          custom_source: 'Pipedline',
           historical_import: historical,
         },
         ...(listId ? { relationships: { list: { data: { type: 'list', id: listId } } } } : {}),

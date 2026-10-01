@@ -7,7 +7,7 @@ import { NotForYourRole } from '@/components/console/states';
 import { Badge, Card, PageHeader } from '@/ui';
 import { saveFeatureOptions, setFeatureEnabled } from './actions';
 
-export const metadata = { title: 'Features · Restaurant OS' };
+export const metadata = { title: 'Features · Pipedline' };
 
 export default async function FeaturesPage() {
   const c = await getConsole();

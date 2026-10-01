@@ -6,7 +6,7 @@ import { ActionForm, Card, Field, Input, SubmitButton } from '@/ui';
 import { saveCampaignsSettingsAction } from '../actions';
 import { CampaignsFrame } from '../shared';
 
-export const metadata = { title: 'Settings · Campaigns · Restaurant OS' };
+export const metadata = { title: 'Settings · Campaigns · Pipedline' };
 
 export default async function CampaignsSettingsPage() {
   const c = await getConsole();

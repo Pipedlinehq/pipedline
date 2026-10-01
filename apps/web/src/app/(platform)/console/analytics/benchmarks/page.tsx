@@ -7,7 +7,7 @@ import { AnalyticsTabs } from '@/components/console/analytics/tabs';
 import { Provenance } from '@/components/console/provenance';
 import { ReadError } from '@/components/console/states';
 
-export const metadata = { title: 'Benchmarks · Analytics · Restaurant OS' };
+export const metadata = { title: 'Benchmarks · Analytics · Pipedline' };
 
 const POSITION: Record<analytics.BenchmarkComparison['position'], { label: string; tone: 'neutral' | 'accent' }> = {
   below_p25: { label: 'Bottom quarter', tone: 'neutral' },

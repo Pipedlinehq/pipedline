@@ -8,7 +8,7 @@ import { ActionForm, Badge, Card, Field, Input, Select, SubmitButton, Textarea, 
 import { pinFlowTemplateAction, runFlowNowAction, setFlowModeAction, updateFlowAction } from '../actions';
 import { CampaignsFrame, modeInfo } from '../shared';
 
-export const metadata = { title: 'Flows · Campaigns · Restaurant OS' };
+export const metadata = { title: 'Flows · Campaigns · Pipedline' };
 
 const ABOUT: Record<campaigns.FlowKey, string> = {
   welcome: 'A hello to a guest shortly after they agree to hear from you.',

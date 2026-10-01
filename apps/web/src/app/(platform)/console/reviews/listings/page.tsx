@@ -10,7 +10,7 @@ import { ActionForm, Badge, Card, EmptyState, Field, Input, LineChart, Select, S
 import { checkForReviews, connectListingAction } from '../actions';
 import { ReviewsFrame } from '../shared';
 
-export const metadata = { title: 'Listings · Reviews · Restaurant OS' };
+export const metadata = { title: 'Listings · Reviews · Pipedline' };
 
 type SP = Record<string, string | string[] | undefined>;
 const RANGES = [14, 28, 90] as const;

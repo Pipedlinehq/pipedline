@@ -8,7 +8,7 @@ import { Card } from '@/ui';
 import { audienceAction, saveCampaignAction, suggestCopyAction } from '../actions';
 import { CampaignsFrame } from '../shared';
 
-export const metadata = { title: 'New campaign · Restaurant OS' };
+export const metadata = { title: 'New campaign · Pipedline' };
 
 export default async function NewCampaignPage() {
   const c = await getConsole();

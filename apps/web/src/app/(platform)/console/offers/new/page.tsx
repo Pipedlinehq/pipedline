@@ -4,7 +4,7 @@ import { ModuleOff, NotForYourRole } from '@/components/console/states';
 import { Card, LinkButton, PageHeader } from '@/ui';
 import { OfferForm } from '../offer-form';
 
-export const metadata = { title: 'New offer · Restaurant OS' };
+export const metadata = { title: 'New offer · Pipedline' };
 
 export default async function NewOfferPage() {
   const c = await getConsole();

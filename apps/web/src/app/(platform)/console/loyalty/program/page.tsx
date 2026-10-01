@@ -7,7 +7,7 @@ import { ActionForm, Card, Checkbox, Field, Input, Select, SubmitButton, Table, 
 import { deleteTierAction, saveProgramAction, saveTierAction } from '../actions';
 import { LoyaltyFrame, loyaltyRoles } from '../shared';
 
-export const metadata = { title: 'Loyalty programme · Restaurant OS' };
+export const metadata = { title: 'Loyalty programme · Pipedline' };
 
 /** How points are earned and what they are worth, and the tiers. Org-wide; managers and owners. */
 export default async function ProgramPage() {

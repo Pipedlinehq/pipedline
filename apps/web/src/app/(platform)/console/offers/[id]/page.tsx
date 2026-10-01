@@ -10,7 +10,7 @@ import { ActionForm, Badge, Card, Dialog, EmptyState, FormMessage, LinkButton, P
 import { issueCodeAction, voidCodeAction } from '../actions';
 import { OFFER_KINDS, OfferForm } from '../offer-form';
 
-export const metadata = { title: 'Offer · Restaurant OS' };
+export const metadata = { title: 'Offer · Pipedline' };
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const STATUSES = ['issued', 'claimed', 'redeemed', 'expired', 'voided'] as const;

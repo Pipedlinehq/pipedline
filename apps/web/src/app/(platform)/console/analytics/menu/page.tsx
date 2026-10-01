@@ -9,7 +9,7 @@ import { AnalyticsFilterRow, Caveats, Provenance } from '@/components/console/pr
 import { AnalyticsTabs } from '@/components/console/analytics/tabs';
 import { ReadError } from '@/components/console/states';
 
-export const metadata = { title: 'Menu performance · Analytics · Restaurant OS' };
+export const metadata = { title: 'Menu performance · Analytics · Pipedline' };
 
 type SP = Record<string, string | string[] | undefined>;
 const one = (sp: SP, k: string) => (Array.isArray(sp[k]) ? sp[k]![0] : (sp[k] as string | undefined));

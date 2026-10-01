@@ -9,7 +9,7 @@ import { NotForYourRole, ReadError } from '@/components/console/states';
 import { ActionForm, Badge, Card, EmptyState, Field, Input, PageHeader, SubmitButton, Table, Td, Th, buttonClass, dateTime } from '@/ui';
 import { addIdentity, saveCommsSettings } from './actions';
 
-export const metadata = { title: 'Privacy and records · Restaurant OS' };
+export const metadata = { title: 'Privacy and records · Pipedline' };
 
 const PURPOSE: Record<string, string> = {
   card_recognition: 'Recognising a guest by their card',

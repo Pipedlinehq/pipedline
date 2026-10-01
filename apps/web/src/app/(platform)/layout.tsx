@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 import '../globals.css';
 
-export const metadata = { title: 'Restaurant OS' };
+export const metadata = { title: 'Pipedline' };
 
 export default function PlatformLayout({ children }: { children: ReactNode }) {
   return (

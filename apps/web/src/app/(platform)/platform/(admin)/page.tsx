@@ -6,7 +6,7 @@ import { Card, PageHeader } from '@/ui';
 import { OnboardingBadge, Stat, hours } from '@/components/platform/status';
 
 export const dynamic = 'force-dynamic';
-export const metadata = { title: 'Platform · Restaurant OS' };
+export const metadata = { title: 'Platform · Pipedline' };
 
 /** The two numbers that decide whether the business works, what is in flight, and what is broken. */
 export default async function PlatformHome() {

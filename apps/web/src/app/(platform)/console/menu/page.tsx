@@ -9,7 +9,7 @@ import { GroupFields, ItemFields, MenuFields, SectionFields } from '@/components
 import { ReadError } from '@/components/console/states';
 import { createGroup, createItem, createMenu, createSection, deleteMenu, deleteSection, setAvailability, setModifierAvailability, updateMenu, updateSection } from './actions';
 
-export const metadata = { title: 'Menu · Restaurant OS' };
+export const metadata = { title: 'Menu · Pipedline' };
 
 const DAY = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 

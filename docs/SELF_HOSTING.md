@@ -9,7 +9,7 @@ what was printed. What was not run is listed at the end under
 [Not covered, not verified](#11-not-covered-not-verified). Read that section before you rely on
 this for real venues.
 
-The engine is called Restaurant OS in the code and on its pages. Variables start with `ROS_`.
+Some names in the code still say `ros` (the packages are `@ros/*`, variables start with `ROS_`): it is the same thing.
 
 ## 1. What runs
 

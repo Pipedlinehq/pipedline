@@ -6,7 +6,7 @@ import { ActionForm, Badge, Card, Checkbox, Dialog, EmptyState, Field, Input, Se
 import { saveRewardAction } from '../actions';
 import { LoyaltyFrame, loyaltyRoles } from '../shared';
 
-export const metadata = { title: 'Rewards · Restaurant OS' };
+export const metadata = { title: 'Rewards · Pipedline' };
 
 const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 

@@ -10,7 +10,7 @@ import { ModuleOff, ReadError, Tabs } from '@/components/console/states';
 import { Badge, Card, EmptyState, PageHeader, Table, Td, Th, money, timeOnly } from '@/ui';
 import { advanceOrder, clearAttention, closeTable, stopOrder } from './actions';
 
-export const metadata = { title: 'Orders · Restaurant OS' };
+export const metadata = { title: 'Orders · Pipedline' };
 
 type View = 'live' | 'all' | 'tables' | 'attention';
 

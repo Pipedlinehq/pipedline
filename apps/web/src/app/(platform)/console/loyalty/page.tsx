@@ -6,7 +6,7 @@ import { ReadError } from '@/components/console/states';
 import { BarChart, Card, EmptyState, RankBars, StatTile, compactMoney, percent } from '@/ui';
 import { LoyaltyFrame, loyaltyRoles, points } from './shared';
 
-export const metadata = { title: 'Loyalty · Restaurant OS' };
+export const metadata = { title: 'Loyalty · Pipedline' };
 
 const DAYS = [7, 30, 90, 365] as const;
 

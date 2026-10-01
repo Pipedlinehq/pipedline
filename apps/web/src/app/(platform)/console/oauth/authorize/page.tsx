@@ -6,7 +6,7 @@ import { Facts } from '@/components/console/states';
 import { decideOAuthAction } from './actions';
 import { AnswerButtons } from './buttons';
 
-export const metadata = { title: 'Connect an assistant · Restaurant OS' };
+export const metadata = { title: 'Connect an assistant · Pipedline' };
 
 type SP = Record<string, string | string[] | undefined>;
 

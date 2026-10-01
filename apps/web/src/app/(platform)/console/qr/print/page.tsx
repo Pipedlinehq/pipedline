@@ -9,7 +9,7 @@ import { QrImage } from '@/components/console/qr-image';
 import { siteBase } from '@/components/console/site-url';
 import { ModuleOff, ReadError } from '@/components/console/states';
 
-export const metadata = { title: 'Print QR codes · Restaurant OS' };
+export const metadata = { title: 'Print QR codes · Pipedline' };
 
 // Print: drop the console's navigation and page padding, one card per code, none split across pages.
 const PRINT_CSS = `

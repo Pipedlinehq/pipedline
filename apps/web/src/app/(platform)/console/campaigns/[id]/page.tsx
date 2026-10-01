@@ -11,7 +11,7 @@ import { Card, FormMessage, LinkButton, StatTile, dateTime, money, percent } fro
 import { audienceAction, cancelCampaignAction, saveCampaignAction, submitCampaignAction, suggestCopyAction } from '../actions';
 import { CampaignStatusBadge, CampaignsFrame, channelWord, guests } from '../shared';
 
-export const metadata = { title: 'Campaign · Restaurant OS' };
+export const metadata = { title: 'Campaign · Pipedline' };
 
 export default async function CampaignPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ created?: string }> }) {
   const { id } = await params;

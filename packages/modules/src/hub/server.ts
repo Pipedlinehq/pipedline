@@ -34,7 +34,7 @@ import { oauthEndpoints } from './address';
  * The tenant is the key's organisation. No tool takes an organisation, and `venue` only chooses
  * among the venues the key already sees.
  */
-export const SERVER_INFO = { name: 'restaurant-os', title: 'Restaurant OS', version: '1.0.0' } as const;
+export const SERVER_INFO = { name: 'restaurant-os', title: 'Pipedline', version: '1.0.0' } as const;
 
 /** What the server is told about the assistant on the other end. */
 export interface ClientFacts {

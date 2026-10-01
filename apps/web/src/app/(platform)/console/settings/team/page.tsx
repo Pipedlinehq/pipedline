@@ -7,7 +7,7 @@ import { NotForYourRole, ReadError } from '@/components/console/states';
 import { ActionForm, Badge, Card, Checkbox, Dialog, EmptyState, Field, Input, PageHeader, SubmitButton, Table, Td, Th } from '@/ui';
 import { invitePerson, removePerson, saveRoles } from './actions';
 
-export const metadata = { title: 'Team · Restaurant OS' };
+export const metadata = { title: 'Team · Pipedline' };
 
 const ROLE_LABEL: Record<StaffRole, string> = {
   owner: 'Owner',

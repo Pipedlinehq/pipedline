@@ -6,7 +6,7 @@ import { NotForYourRole, ReadError } from '@/components/console/states';
 import { Badge, Card, EmptyState, Input, LinkButton, Table, Td, Th, dateTime } from '@/ui';
 import { LoyaltyFrame, loyaltyRoles } from '../shared';
 
-export const metadata = { title: 'Members · Restaurant OS' };
+export const metadata = { title: 'Members · Pipedline' };
 
 const PAGE = 50;
 

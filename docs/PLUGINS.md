@@ -7,8 +7,8 @@ The worked example is a real module in this repository: `specials`, a venue's sp
 The code excerpts below are from its files (shortened where the text says so), and every
 command output shown was produced by running the command.
 
-A note on names. The public name is Pipedline. Inside the code the engine is still called
-Restaurant OS, and its packages are `@ros/core`, `@ros/modules` and so on. They are the same thing.
+A note on names. The public name is Pipedline. Some names in the code still say `ros`: the
+packages are `@ros/core`, `@ros/modules` and so on. It is the same thing.
 
 ## Before you start
 

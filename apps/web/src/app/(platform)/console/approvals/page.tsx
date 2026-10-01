@@ -7,7 +7,7 @@ import { NotForYourRole, ReadError, Tabs } from '@/components/console/states';
 import { Card, EmptyState, PageHeader, Table, Td, Th, dateTime } from '@/ui';
 import { decide } from './actions';
 
-export const metadata = { title: 'Approvals · Restaurant OS' };
+export const metadata = { title: 'Approvals · Pipedline' };
 
 type Status = 'pending' | 'approved' | 'rejected' | 'expired';
 

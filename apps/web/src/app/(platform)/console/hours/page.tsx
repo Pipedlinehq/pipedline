@@ -7,7 +7,7 @@ import { InlineAction } from '@/components/console/confirm';
 import { NotForYourRole, ReadError } from '@/components/console/states';
 import { addException, removeException, saveTradingHours, saveVenue } from './actions';
 
-export const metadata = { title: 'Hours · Restaurant OS' };
+export const metadata = { title: 'Hours · Pipedline' };
 
 // Monday first, as the week is read in Australia. dayOfWeek is 0 = Sunday.
 const WEEK = [

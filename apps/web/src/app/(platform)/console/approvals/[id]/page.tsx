@@ -9,7 +9,7 @@ import { ReviewReplyApproval } from '@/components/console/approval-review-reply'
 import { Card, LinkButton, PageHeader, dateTime } from '@/ui';
 import { decide } from '../actions';
 
-export const metadata = { title: 'Approval · Restaurant OS' };
+export const metadata = { title: 'Approval · Pipedline' };
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 

@@ -10,7 +10,7 @@ import { Card, LinkButton, PageHeader } from '@/ui';
 import { choosePosLocation, leavePosSignIn } from './actions';
 
 export const dynamic = 'force-dynamic';
-export const metadata = { title: 'Connecting a point of sale · Restaurant OS', robots: { index: false } };
+export const metadata = { title: 'Connecting a point of sale · Pipedline', robots: { index: false } };
 
 type Query = Record<string, string | string[] | undefined>;
 const one = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v) || null;

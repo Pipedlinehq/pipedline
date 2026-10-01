@@ -12,7 +12,7 @@ import { Badge, Card, EmptyState, Field, Input, LinkButton, PageHeader, Table, T
 import { saveFeatureOptions } from '../features/actions';
 import { createKey, revokeKey, setKeyCanWrite } from './actions';
 
-export const metadata = { title: 'Assistant access · Restaurant OS' };
+export const metadata = { title: 'Assistant access · Pipedline' };
 
 const OUTCOME_TONE: Record<string, 'good' | 'warn' | 'bad' | 'neutral' | 'accent'> = {
   answered: 'good',

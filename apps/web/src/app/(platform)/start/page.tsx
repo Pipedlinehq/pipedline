@@ -6,7 +6,7 @@ import { ActionForm, Field, FormMessage, Input, SubmitButton } from '@/ui';
 import { requestStartCode, startVenue, verifyStartCode } from './actions';
 import { selfServeOpen } from './open';
 
-export const metadata = { title: 'Start a venue · Restaurant OS' };
+export const metadata = { title: 'Start a venue · Pipedline' };
 export const dynamic = 'force-dynamic';
 
 export default async function StartPage({ searchParams }: { searchParams: Promise<{ email?: string; sent?: string }> }) {

@@ -5,7 +5,7 @@ import { simPosSignIn } from '@/lib/ops-dev';
 import { Card, PageHeader, buttonClass } from '@/ui';
 
 export const dynamic = 'force-dynamic';
-export const metadata = { title: 'Simulated sign-in · Restaurant OS', robots: { index: false } };
+export const metadata = { title: 'Simulated sign-in · Pipedline', robots: { index: false } };
 
 const one = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v) ?? '';
 
@@ -31,7 +31,7 @@ export default async function SimPosSignInPage({ searchParams }: { searchParams:
   return (
     <main className="mx-auto max-w-xl px-6 py-10">
       <PageHeader title={`Simulated ${name} sign-in`} description={`Development only. This stands in for ${name}'s own sign-in page: nothing here reaches ${name}.`} />
-      <Card title="Restaurant OS is asking for access">
+      <Card title="Pipedline is asking for access">
         {/* A plain GET form: the answer is a redirect from the "provider", followed by the browser like any other. */}
         <form method="get" action="/dev/pos-signin/decide" className="space-y-4">
           <input type="hidden" name="state" value={state} />

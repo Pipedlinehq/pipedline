@@ -7,7 +7,7 @@ import { dateTime } from '@/ui/format';
 import { AnalyticsTabs } from '@/components/console/analytics/tabs';
 import { Facts, ReadError } from '@/components/console/states';
 
-export const metadata = { title: 'Data dictionary · Analytics · Restaurant OS' };
+export const metadata = { title: 'Data dictionary · Analytics · Pipedline' };
 
 const DIRECTION = { up_is_good: 'Higher is better', down_is_good: 'Lower is better', neutral: 'Neither' } as const;
 

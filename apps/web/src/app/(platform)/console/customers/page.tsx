@@ -6,7 +6,7 @@ import { read } from '@/lib/console-read';
 import { NotForYourRole, ReadError } from '@/components/console/states';
 import { Card, EmptyState, FormMessage, PageHeader, Table, Td, Th, dateTime } from '@/ui';
 
-export const metadata = { title: 'Customers · Restaurant OS' };
+export const metadata = { title: 'Customers · Pipedline' };
 
 export default async function CustomersPage({ searchParams }: { searchParams: Promise<{ q?: string; erased?: string }> }) {
   const sp = await searchParams;

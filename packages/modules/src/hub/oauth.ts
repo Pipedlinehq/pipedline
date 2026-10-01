@@ -665,7 +665,7 @@ export async function handleOAuthRequest(app: App, request: Request, opts: OAuth
       resourceServerUrl: new URL(mcpResourceUrl(app)),
       serviceDocumentationUrl: new URL(oauthEndpoints(app).documentation),
       scopesSupported: ['read', 'write'],
-      resourceName: 'Restaurant OS',
+      resourceName: 'Pipedline',
       // Local and test hosts are plain http; production is always https.
       ...(app.config.scheme === 'http' && app.config.env !== 'production' ? { dangerouslyAllowInsecureIssuerUrl: true } : {}),
     };

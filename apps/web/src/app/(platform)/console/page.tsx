@@ -12,7 +12,7 @@ import { PinnedViews } from '@/components/console/analytics/views';
 import { FunnelSteps } from '@/components/console/analytics/funnel';
 import { ReadError } from '@/components/console/states';
 
-export const metadata = { title: 'Overview · Restaurant OS' };
+export const metadata = { title: 'Overview · Pipedline' };
 
 const COMPARE_WORDS = { previous_period: 'Previous period', same_period_last_year: 'Same period last year' } as const;
 

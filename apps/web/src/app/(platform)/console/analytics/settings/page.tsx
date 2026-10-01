@@ -6,7 +6,7 @@ import { AnalyticsTabs } from '@/components/console/analytics/tabs';
 import { NotForYourRole, ReadError } from '@/components/console/states';
 import { saveAnalyticsSettingsAction } from '../actions';
 
-export const metadata = { title: 'Analytics settings · Restaurant OS' };
+export const metadata = { title: 'Analytics settings · Pipedline' };
 
 /** The organisation's analytics settings: dayparts, segment thresholds, the privacy floor and digest sensitivity. */
 export default async function AnalyticsSettingsPage() {

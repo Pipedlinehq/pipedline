@@ -8,7 +8,7 @@ import { AnalyticsTabs } from '@/components/console/analytics/tabs';
 import { ReadError } from '@/components/console/states';
 import { buildDigestAction } from '../actions';
 
-export const metadata = { title: 'Digests · Analytics · Restaurant OS' };
+export const metadata = { title: 'Digests · Analytics · Pipedline' };
 
 type SP = Record<string, string | string[] | undefined>;
 const KINDS = [

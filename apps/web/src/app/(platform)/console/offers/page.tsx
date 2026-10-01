@@ -7,7 +7,7 @@ import { ModuleOff, ReadError } from '@/components/console/states';
 import { Badge, Card, EmptyState, LinkButton, PageHeader, RankBars, StatTile, Table, Td, Th, compactMoney, money, percent } from '@/ui';
 import { OFFER_KINDS } from './offer-form';
 
-export const metadata = { title: 'Offers · Restaurant OS' };
+export const metadata = { title: 'Offers · Pipedline' };
 
 const DAYS = [30, 90, 365] as const;
 

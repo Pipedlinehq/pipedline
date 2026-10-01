@@ -8,7 +8,7 @@ import { NotForYourRole, ReadError } from '@/components/console/states';
 import { Badge, Card, EmptyState, Field, Input, PageHeader, Select, Table, Td, Th, dateTime } from '@/ui';
 import { pairScreen, revokeScreen } from './actions';
 
-export const metadata = { title: 'Kitchen screens · Restaurant OS' };
+export const metadata = { title: 'Kitchen screens · Pipedline' };
 
 export default async function ScreensPage() {
   const c = await getConsole();

@@ -2,7 +2,7 @@ import { requireSim } from '@/lib/dev';
 import { Card, PageHeader } from '@/ui';
 
 export const dynamic = 'force-dynamic';
-export const metadata = { title: 'Simulated inbox · Restaurant OS' };
+export const metadata = { title: 'Simulated inbox · Pipedline' };
 
 /** Every email and SMS the simulated providers "sent", newest first. Development only. */
 export default function DevInboxPage() {

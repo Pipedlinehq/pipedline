@@ -9,7 +9,7 @@ import { KpiTiles, ResultTable, Section } from '@/components/console/analytics/b
 import { AnalyticsTabs } from '@/components/console/analytics/tabs';
 import { ReadError } from '@/components/console/states';
 
-export const metadata = { title: 'Sales · Analytics · Restaurant OS' };
+export const metadata = { title: 'Sales · Analytics · Pipedline' };
 
 const COMPARE_WORDS = { previous_period: 'Previous period', same_period_last_year: 'Same period last year' } as const;
 

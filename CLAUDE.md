@@ -1,4 +1,4 @@
-# Restaurant OS — session guide
+# Pipedline — session guide
 
 A multi-tenant hub for hospitality venues: website, QR menu, ordering, delivery, loyalty, comms,
 analytics, and an MCP server so a venue's own assistant can read and act. One codebase, one

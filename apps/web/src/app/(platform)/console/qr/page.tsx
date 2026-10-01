@@ -9,7 +9,7 @@ import { siteBase } from '@/components/console/site-url';
 import { ModuleOff, ReadError } from '@/components/console/states';
 import { createCode, createTableCodes, deactivateCode, reactivateCode, updateCode } from './actions';
 
-export const metadata = { title: 'QR codes · Restaurant OS' };
+export const metadata = { title: 'QR codes · Pipedline' };
 
 const KIND: Record<string, string> = { menu: 'Menu', table: 'Table', counter: 'Counter', campaign: 'Campaign' };
 

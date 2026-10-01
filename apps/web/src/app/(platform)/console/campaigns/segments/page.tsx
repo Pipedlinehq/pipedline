@@ -7,7 +7,7 @@ import { ReadError } from '@/components/console/states';
 import { Badge, Card, EmptyState, FormMessage, LinkButton, Table, Td, Th } from '@/ui';
 import { CampaignsFrame } from '../shared';
 
-export const metadata = { title: 'Segments · Campaigns · Restaurant OS' };
+export const metadata = { title: 'Segments · Campaigns · Pipedline' };
 
 /** Groups of guests by rule. A segment is a question about the guest list, answered as a count. */
 export default async function SegmentsPage({ searchParams }: { searchParams: Promise<{ deleted?: string }> }) {

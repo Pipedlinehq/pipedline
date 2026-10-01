@@ -11,7 +11,7 @@ import { Card, EmptyState, RankBars, StatTile, dateTime } from '@/ui';
 import { postReplyNow, sendReplyForApproval } from './actions';
 import { ReviewsFrame } from './shared';
 
-export const metadata = { title: 'Reviews · Restaurant OS' };
+export const metadata = { title: 'Reviews · Pipedline' };
 
 type SP = Record<string, string | string[] | undefined>;
 const one = (sp: SP, k: string) => (Array.isArray(sp[k]) ? sp[k]![0] : (sp[k] as string | undefined));

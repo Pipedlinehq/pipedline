@@ -11,7 +11,7 @@ import { Badge, Card } from '@/ui';
 import { saveReviewSettings } from '../actions';
 import { ReviewsFrame } from '../shared';
 
-export const metadata = { title: 'Reply settings · Reviews · Restaurant OS' };
+export const metadata = { title: 'Reply settings · Reviews · Pipedline' };
 
 const MODE: Record<string, { label: string; means: string }> = {
   off: { label: 'Off', means: 'The review agent drafts nothing. Replies are written by people.' },

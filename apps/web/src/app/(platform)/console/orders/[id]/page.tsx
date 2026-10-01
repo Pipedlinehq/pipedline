@@ -12,7 +12,7 @@ import { Facts, ModuleOff, ReadError } from '@/components/console/states';
 import { Badge, Card, GuestText, LinkButton, PageHeader, Table, Td, Th, dateTime, money, timeOnly } from '@/ui';
 import { advanceOrder, clearAttention, refund, stopOrder } from '../actions';
 
-export const metadata = { title: 'Order · Restaurant OS' };
+export const metadata = { title: 'Order · Pipedline' };
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 

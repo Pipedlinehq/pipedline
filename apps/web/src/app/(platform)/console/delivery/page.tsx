@@ -9,7 +9,7 @@ import { ModuleOff, ReadError } from '@/components/console/states';
 import { ActionForm, Badge, Card, Checkbox, Dialog, EmptyState, Field, Input, PageHeader, Select, SubmitButton, Table, Td, Th, dateTime, money } from '@/ui';
 import { deactivateZone, saveDeliverySettings, saveZone } from './actions';
 
-export const metadata = { title: 'Delivery · Restaurant OS' };
+export const metadata = { title: 'Delivery · Pipedline' };
 
 type Tone = 'neutral' | 'good' | 'warn' | 'bad' | 'accent';
 const STATUS: Record<string, { label: string; tone: Tone }> = {

@@ -9,7 +9,7 @@ import { ItemFields } from '@/components/console/menu-fields';
 import { NotForYourRole, ReadError } from '@/components/console/states';
 import { deleteItem, setItemGroups, updateItem } from '../../actions';
 
-export const metadata = { title: 'Edit item · Restaurant OS' };
+export const metadata = { title: 'Edit item · Pipedline' };
 
 export default async function ItemPage({ params }: { params: Promise<{ itemId: string }> }) {
   const { itemId } = await params;

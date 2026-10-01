@@ -6,7 +6,7 @@ import { ReadError } from '@/components/console/states';
 import { Card, EmptyState, LinkButton, Table, Td, Th, dateTime } from '@/ui';
 import { CampaignStatusBadge, CampaignsFrame, channelWord } from './shared';
 
-export const metadata = { title: 'Campaigns · Restaurant OS' };
+export const metadata = { title: 'Campaigns · Pipedline' };
 
 const STATUSES = ['draft', 'pending_approval', 'sending', 'sent', 'cancelled'] as const;
 const STATUS_LABEL: Record<string, string> = { draft: 'Drafts', pending_approval: 'Waiting for approval', sending: 'Sending', sent: 'Sent', cancelled: 'Cancelled' };

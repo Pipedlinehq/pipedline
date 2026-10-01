@@ -10,7 +10,7 @@ import { adjustPointsAction, setMemberStatusAction } from '../../actions';
 import { LoyaltyFrame, loyaltyRoles, points } from '../../shared';
 import { AdjustFields } from './adjust-fields';
 
-export const metadata = { title: 'Member · Restaurant OS' };
+export const metadata = { title: 'Member · Pipedline' };
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 

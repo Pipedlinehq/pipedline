@@ -7,7 +7,7 @@ import { ActionForm, Card, Field, Input, PageHeader, Select, SubmitButton, Table
 import { criotaAction, messageEventAction, orderAction, pairingAction, posHealthAction, refundAction, replayAction, saleAction, verifyDomainAction } from './actions';
 
 export const dynamic = 'force-dynamic';
-export const metadata = { title: 'Simulator controls · Restaurant OS' };
+export const metadata = { title: 'Simulator controls · Pipedline' };
 
 function VenueSelect({ venues, name = 'venueId' }: { venues: dev.DevVenue[]; name?: string }) {
   return (

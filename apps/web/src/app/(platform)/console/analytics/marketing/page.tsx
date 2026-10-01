@@ -11,7 +11,7 @@ import { ResultTable, Section } from '@/components/console/analytics/blocks';
 import { FunnelSteps } from '@/components/console/analytics/funnel';
 import { AnalyticsTabs } from '@/components/console/analytics/tabs';
 
-export const metadata = { title: 'Marketing · Analytics · Restaurant OS' };
+export const metadata = { title: 'Marketing · Analytics · Pipedline' };
 
 type SP = Record<string, string | string[] | undefined>;
 const SPLITS = ['utm_source', 'utm_medium', 'campaign', 'creator', 'device_class', 'landing_path'] as const;

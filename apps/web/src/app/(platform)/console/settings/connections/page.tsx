@@ -25,7 +25,7 @@ import {
   syncEmailPlatform,
 } from './actions';
 
-export const metadata = { title: 'Connected services · Restaurant OS' };
+export const metadata = { title: 'Connected services · Pipedline' };
 
 const STATUS: Record<string, { label: string; tone: 'good' | 'warn' | 'bad' | 'neutral' }> = {
   connected: { label: 'Connected', tone: 'good' },

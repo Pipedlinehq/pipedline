@@ -9,7 +9,7 @@ import { GroupFields, ModifierFields } from '@/components/console/menu-fields';
 import { NotForYourRole, ReadError } from '@/components/console/states';
 import { createModifier, deleteGroup, deleteModifier, updateGroup, updateModifier } from '../../actions';
 
-export const metadata = { title: 'Edit choices · Restaurant OS' };
+export const metadata = { title: 'Edit choices · Pipedline' };
 
 export default async function GroupPage({ params }: { params: Promise<{ groupId: string }> }) {
   const { groupId } = await params;

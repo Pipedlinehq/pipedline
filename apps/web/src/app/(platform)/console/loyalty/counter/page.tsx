@@ -9,7 +9,7 @@ import { ActionForm, Badge, Card, EmptyState, Field, FormMessage, Input, LinkBut
 import { enrolAction, forceConfirmAction, issueRedemptionAction, lookupAction, redeemCodeAction, voidRedemptionAction } from '../actions';
 import { LoyaltyFrame, loyaltyRoles, points } from '../shared';
 
-export const metadata = { title: 'Counter · Restaurant OS' };
+export const metadata = { title: 'Counter · Pipedline' };
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 

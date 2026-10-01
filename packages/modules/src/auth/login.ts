@@ -5,7 +5,7 @@ import { linkSessionToCustomer } from '../events/sessions';
 import { badCode, issueOtp, parseDestination, verifyOtp } from './otp';
 import { type Membership, createSession, membershipsOf } from './sessions';
 
-const PLATFORM_NAME = 'Restaurant OS';
+const PLATFORM_NAME = 'Pipedline';
 
 export interface RequestMeta {
   ip?: string;

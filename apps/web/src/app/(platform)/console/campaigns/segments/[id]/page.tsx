@@ -10,7 +10,7 @@ import { Badge, Card, FormMessage, LinkButton, StatTile, percent } from '@/ui';
 import { deleteSegmentAction, previewRuleAction, saveSegmentAction } from '../../actions';
 import { CampaignsFrame } from '../../shared';
 
-export const metadata = { title: 'Segment · Campaigns · Restaurant OS' };
+export const metadata = { title: 'Segment · Campaigns · Pipedline' };
 
 export default async function SegmentPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ created?: string }> }) {
   const { id } = await params;

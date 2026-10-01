@@ -11,7 +11,7 @@ import { siteBase } from '@/components/console/site-url';
 import { ModuleOff, NotForYourRole, ReadError } from '@/components/console/states';
 import { addBlock, deletePage, discardDraft, moveBlock, publishPage, removeBlock, saveBlock, savePageMeta, unpublishPage } from '../../actions';
 
-export const metadata = { title: 'Edit page · Restaurant OS' };
+export const metadata = { title: 'Edit page · Pipedline' };
 
 export default async function PageEditor({ params }: { params: Promise<{ pageId: string }> }) {
   const { pageId } = await params;

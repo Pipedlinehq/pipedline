@@ -5,7 +5,7 @@ import { STAFF_COOKIE, readCookie } from '@/lib/cookies';
 import { Button } from '@/ui';
 import { chooseOrg } from '../actions';
 
-export const metadata = { title: 'Choose a business · Restaurant OS' };
+export const metadata = { title: 'Choose a business · Pipedline' };
 
 export default async function ChooseOrgPage() {
   const token = await readCookie(STAFF_COOKIE);

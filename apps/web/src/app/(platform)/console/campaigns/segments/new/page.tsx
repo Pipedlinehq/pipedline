@@ -5,7 +5,7 @@ import { Card } from '@/ui';
 import { previewRuleAction, saveSegmentAction } from '../../actions';
 import { CampaignsFrame } from '../../shared';
 
-export const metadata = { title: 'New segment · Campaigns · Restaurant OS' };
+export const metadata = { title: 'New segment · Campaigns · Pipedline' };
 
 export default async function NewSegmentPage() {
   const c = await getConsole();

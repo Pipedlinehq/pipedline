@@ -6,7 +6,7 @@ import { NotForYourRole, ReadError } from '@/components/console/states';
 import { ActionForm, Badge, Card, EmptyState, Field, Input, LinkButton, PageHeader, SubmitButton, Table, Td, Th, Textarea, dateTime } from '@/ui';
 import { startImport } from './actions';
 
-export const metadata = { title: 'Import a menu · Restaurant OS' };
+export const metadata = { title: 'Import a menu · Pipedline' };
 
 type Tone = 'neutral' | 'good' | 'warn' | 'bad' | 'accent';
 const IMPORT_STATUS: Record<string, { label: string; tone: Tone }> = {

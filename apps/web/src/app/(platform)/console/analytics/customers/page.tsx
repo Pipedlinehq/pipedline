@@ -10,7 +10,7 @@ import { Section } from '@/components/console/analytics/blocks';
 import { AnalyticsTabs } from '@/components/console/analytics/tabs';
 import { ReadError } from '@/components/console/states';
 
-export const metadata = { title: 'Customer insight · Analytics · Restaurant OS' };
+export const metadata = { title: 'Customer insight · Analytics · Pipedline' };
 
 /**
  * The customer base in aggregate: new against returning, segments, cohort retention, the time

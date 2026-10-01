@@ -8,7 +8,7 @@ import { ModuleOff, NotForYourRole, ReadError } from '@/components/console/state
 import { WebsiteFrame } from '@/components/console/website-frame';
 import { importRedirects, removeRedirect } from '../actions';
 
-export const metadata = { title: 'Redirects · Restaurant OS' };
+export const metadata = { title: 'Redirects · Pipedline' };
 
 export default async function RedirectsPage() {
   const c = await getConsole();

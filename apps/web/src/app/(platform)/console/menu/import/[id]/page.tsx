@@ -8,7 +8,7 @@ import { AutoRefresh } from '@/components/platform/auto-refresh';
 import { ActionForm, Badge, Card, Checkbox, EmptyState, Field, FormMessage, Input, LinkButton, PageHeader, SubmitButton, Textarea, money } from '@/ui';
 import { confirmImportItem, discardImport, discardImportItem, saveImportItem } from '../actions';
 
-export const metadata = { title: 'Review an imported menu · Restaurant OS' };
+export const metadata = { title: 'Review an imported menu · Pipedline' };
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 

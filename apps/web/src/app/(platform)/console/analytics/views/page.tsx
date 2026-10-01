@@ -13,7 +13,7 @@ import { ConfirmAction, InlineAction } from '@/components/console/confirm';
 import { ReadError } from '@/components/console/states';
 import { deleteViewAction, pinViewAction, saveViewAction } from '../actions';
 
-export const metadata = { title: 'Explore and saved views · Analytics · Restaurant OS' };
+export const metadata = { title: 'Explore and saved views · Analytics · Pipedline' };
 
 type SP = Record<string, string | string[] | undefined>;
 const many = (sp: SP, k: string): string[] => (Array.isArray(sp[k]) ? (sp[k] as string[]) : sp[k] ? [sp[k] as string] : []);

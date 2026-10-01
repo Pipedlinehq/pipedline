@@ -9,7 +9,7 @@ import { ModuleOff, NotForYourRole, ReadError } from '@/components/console/state
 import { WebsiteFrame } from '@/components/console/website-frame';
 import { saveSettings } from '../actions';
 
-export const metadata = { title: 'Website settings · Restaurant OS' };
+export const metadata = { title: 'Website settings · Pipedline' };
 
 const SOCIAL: Array<[string, string, string]> = [
   ['instagram', 'Instagram', 'https://www.instagram.com/…'],

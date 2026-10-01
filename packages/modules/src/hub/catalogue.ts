@@ -37,8 +37,8 @@ const WRITES_ON =
 
 function venuesSentence(caller: ResolvedAgentKey): string {
   const names = caller.venues.map((v) => (v.suburb ? `${v.name} (${v.suburb})` : v.name));
-  if (names.length === 1) return `This is ${names[0]}, a hospitality venue run by ${caller.orgName}, on Restaurant OS.`;
-  return `This is ${caller.orgName}, a hospitality group on Restaurant OS, with these venues: ${names.join('; ')}.`;
+  if (names.length === 1) return `This is ${names[0]}, a hospitality venue run by ${caller.orgName}, on Pipedline.`;
+  return `This is ${caller.orgName}, a hospitality group on Pipedline, with these venues: ${names.join('; ')}.`;
 }
 
 function writesSentence(app: App, caller: ResolvedAgentKey, offer: Offer): string {

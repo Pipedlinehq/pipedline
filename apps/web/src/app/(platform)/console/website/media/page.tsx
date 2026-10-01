@@ -9,7 +9,7 @@ import { ModuleOff, NotForYourRole, ReadError } from '@/components/console/state
 import { WebsiteFrame } from '@/components/console/website-frame';
 import { removeMedia, setMediaAlt, uploadMedia } from '../actions';
 
-export const metadata = { title: 'Media · Restaurant OS' };
+export const metadata = { title: 'Media · Pipedline' };
 
 const size = (bytes: number | null) => (bytes === null ? '' : bytes > 1_000_000 ? `${(bytes / 1_000_000).toFixed(1)} MB` : `${Math.round(bytes / 1000)} KB`);
 

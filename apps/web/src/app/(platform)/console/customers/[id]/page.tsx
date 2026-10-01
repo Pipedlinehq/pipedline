@@ -10,7 +10,7 @@ import { Facts, NotForYourRole, ReadError } from '@/components/console/states';
 import { ActionForm, Badge, Card, Field, GuestText, Input, LinkButton, PageHeader, SubmitButton, Table, Td, Textarea, Th, dateTime, money } from '@/ui';
 import { erase, saveCustomer, withdrawConsent } from '../actions';
 
-export const metadata = { title: 'Customer · Restaurant OS' };
+export const metadata = { title: 'Customer · Pipedline' };
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 

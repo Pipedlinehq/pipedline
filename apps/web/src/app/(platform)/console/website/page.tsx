@@ -9,7 +9,7 @@ import { ModuleOff, NotForYourRole, ReadError } from '@/components/console/state
 import { WebsiteFrame, readSite } from '@/components/console/website-frame';
 import { createPage } from './actions';
 
-export const metadata = { title: 'Website · Restaurant OS' };
+export const metadata = { title: 'Website · Pipedline' };
 
 export default async function WebsitePages({ searchParams }: { searchParams: Promise<{ site?: string }> }) {
   const c = await getConsole();

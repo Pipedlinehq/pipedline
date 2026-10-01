@@ -8,7 +8,7 @@ import { ModuleOff, NotForYourRole, ReadError } from '@/components/console/state
 import { WebsiteFrame, readSite } from '@/components/console/website-frame';
 import { clearOverride, saveBrand } from '../actions';
 
-export const metadata = { title: 'Brand · Restaurant OS' };
+export const metadata = { title: 'Brand · Pipedline' };
 
 const COLOUR_LABELS: Array<[string, string]> = [
   ['primary', 'Primary'],

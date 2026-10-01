@@ -1,7 +1,7 @@
 import { ActionForm, Field, FormMessage, Input, SubmitButton } from '@/ui';
 import { requestPlatformCode, verifyPlatformCode } from './actions';
 
-export const metadata = { title: 'Platform sign in · Restaurant OS' };
+export const metadata = { title: 'Platform sign in · Pipedline' };
 
 export default async function PlatformLoginPage({ searchParams }: { searchParams: Promise<{ email?: string; sent?: string }> }) {
   const { email, sent } = await searchParams;

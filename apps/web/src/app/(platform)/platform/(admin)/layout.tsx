@@ -19,7 +19,7 @@ export default async function PlatformAdminLayout({ children }: { children: Reac
       <header className="border-b border-line bg-surface">
         <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-4 px-6 py-3">
           <Link href="/platform" className="font-semibold tracking-tight">
-            Restaurant OS <span className="rounded bg-ink px-1.5 py-0.5 text-xs font-medium text-white">Platform</span>
+            Pipedline <span className="rounded bg-ink px-1.5 py-0.5 text-xs font-medium text-white">Platform</span>
           </Link>
           <PlatformNav />
           <div className="ml-auto flex items-center gap-3 text-sm text-ink-2">
