@@ -1,23 +1,55 @@
-# Pipedline: the direction of record (2026-10-01)
+# Pipedline: the direction of record
 
-Restaurant OS and Pipedline are the same thing. **Pipedline** is the name venues see
-(pipedline.com); this repository is its engine. This file states the goal and what has to change
-to reach it. Where it disagrees with an older doc, this file wins until that doc is updated.
+Last changed 2026-10-02. **This file is the contract.** It says what Pipedline is, so that no
+later piece of work quietly turns it into something else. Where it disagrees with an older
+document, this file wins until that document is updated. Change it only by a decision of the
+owner, and record the change in the log at the end.
 
-## The goal
+## The object
 
-A free, open ecosystem in which a venue builds its own operating system from Pipedline plugins,
-and the venue's own AI assistant does the building.
+**Pipedline is a harness for a hospitality venue's AI assistant.**
 
-- **Free.** No plan, no per-venue fee, no paid tier of plugins.
-- **Plugins.** Every capability (QR menu, ordering, loyalty, comms, analytics, reviews, delivery,
-  website) is a plugin a venue switches on. Third-party services (Criota first) are plugins too.
-- **Agentic self-integration.** A venue owner connects their assistant (Claude or ChatGPT) to
-  Pipedline and says "set my venue up". The assistant reads what is available, asks the owner the
-  few things only they know, proposes each step, and does it when the owner says yes. A person
-  never has to be onboarded by us.
+A model on its own can talk, plan and draft. It cannot hold a venue's records, does not know
+what "repeat rate" means for a restaurant, has no rules about consent, and does nothing when no
+chat is open. A harness is what surrounds the model and supplies those things. Pipedline is that,
+for hospitality:
+
+1. **A record that persists.** The sales ledger, customer identity and consent, in one place
+   the venue controls.
+2. **Exact definitions.** The measures a venue needs, each defined once, so every assistant
+   gives the same answer.
+3. **Hospitality parameters.** What to connect, what to measure, which consents to collect,
+   in what order: the venue's whole data stack, planned against tested parameters.
+4. **Guardrails.** Roles, yes-before-change, a log of everything done, autonomy in stages.
+5. **Work with no chat open.** Schedules, incoming events, sending.
+6. **Tools the assistant uses**, including setting the venue up, over MCP.
+
+It is **not** an operating system that replaces a venue's till, ordering or booking stack. The
+plugins that host things (website, QR menu, ordering, delivery, loyalty) exist and stay optional.
+They are not the product, they are not why a venue comes, and nothing in the harness may depend
+on a venue using them. A venue that keeps every tool it has and adds only Pipedline has the whole
+product.
+
+The test for any proposed work: **does it make a venue's own assistant more reliable at running
+that venue?** If it only makes Pipedline a better website builder or ordering system, it is not
+the priority.
+
+## The terms
+
+- **Free and open.** The software and every plugin are free. The code is AGPL-3.0-only.
+- **Three ways to use it.** Run it yourself (free). Hosted, with your own assistant (free;
+  anything that costs money to run is passed through at cost plus a stated percentage). Hosted,
+  with our agent doing the work (usage at cost plus a percentage).
+- **Agentic self-integration.** A venue owner connects their assistant (Claude or ChatGPT) and
+  says "set my venue up". The assistant reads what is available, asks the owner the few things
+  only they know, proposes each step, and does it when the owner says yes. Nobody is onboarded
+  by us.
+- **Plugins.** Capabilities are plugins a venue switches on. Third-party services (Criota first)
+  are plugins too, and others may write them.
+- **Its own venture.** Pipedline is not a person's brand. No individual is named on its site,
+  in its messages or as its collector of data.
 - **Where the money is:** courses on agent harnesses and data pipelines (bought by agencies,
-  consultants and developers, not owners), and Criota.
+  consultants and developers, not owners), usage on the hosted options, and Criota.
 
 ## What already fits
 
@@ -140,3 +172,17 @@ Before the repository is made public (none of this is done until `docs/STATUS.md
 1. (settled: AGPL-3.0-only)
 2. Usage billing: prepaid credits or monthly invoice; the percentage; which costs besides tokens are passed through.
 3. Which real venue goes first, as a read-only shadow?
+
+## Log of decisions
+
+| Date | Decision |
+|---|---|
+| 2026-09-30 | v1 cut to website, QR, ordering, delivery and the hub; bookings, full kitchen display and own POS deferred. A separate unticked card checkbox for card recognition. |
+| 2026-10-01 | Built: all v1 modules, console, venue site, MCP server, analytics. Square verified against the sandbox (adapter, ingest, sign-in, webhooks). |
+| 2026-10-01 | Restaurant OS and Pipedline are one thing. Goal restated: free, plugin-based, set up by the venue's own assistant. Managed setup as a service dropped; courses replace it. |
+| 2026-10-01 | Two hosted modes: your own assistant (free), our agent (usage at cost plus a percentage). Self-serve email and domains wanted, in-product. |
+| 2026-10-01 | Run-it-yourself is the third, free way to use it. Licence: AGPL-3.0-only. |
+| 2026-10-02 | Published at github.com/Pipedlinehq/pipedline as a clean snapshot. Self-serve start and 17 setup tools built. Self-hosting and plugin guides written by doing them. |
+| 2026-10-02 | Hosted service live at app.pipedline.com (email only; sign-up page closed by default). |
+| 2026-10-02 | Pipedline is its own venture: no individual named anywhere. |
+| 2026-10-02 | **Positioning: a harness, not an OS.** The record, definitions, parameters, guardrails and tools around a venue's assistant are the product; the hosting plugins are optional. The data-stack guide becomes something the assistant runs (a planner over tested parameters), not prose. |

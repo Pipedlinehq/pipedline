@@ -1,12 +1,15 @@
 # Pipedline
 
-A free, open skeleton for a hospitality venue's operating system, built to be set up and run by
-the venue's own AI assistant.
+A free, open harness for a hospitality venue's AI assistant.
 
-Every capability is a plugin a venue switches on: website, QR menu, online ordering, delivery,
-loyalty, email and SMS, reviews, analytics. An MCP server lets the venue's assistant (Claude,
-ChatGPT) read the venue's numbers, set the venue up, and act on its behalf, with the owner
-confirming every change. Third-party services plug in the same way.
+A model on its own can talk and draft. Pipedline supplies what it lacks to run a venue: a record
+that persists (sales, customers, consent), exact definitions of the measures a venue needs,
+guardrails (roles, yes-before-change, a log), work that happens with no chat open, and the tools
+to do it over MCP, including setting the venue up. The owner confirms every change.
+
+Optional plugins host things too (website, QR menu, ordering, delivery, loyalty), and third-party
+services plug in the same way. A venue that keeps every tool it has and adds only Pipedline has
+the whole product. The contract is `docs/PIPEDLINE.md`.
 
 **Status: pre-release.** Built and tested against simulated providers and the Square sandbox. It
 has never run a real venue and has never been deployed. Read `docs/STATUS.md` before relying on
