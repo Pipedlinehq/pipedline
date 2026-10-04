@@ -387,7 +387,7 @@ set `ROS_INLINE_WORKER=1` on the web app and do not start the worker.
 
 The web app decides what a request is for from its `Host` header, and nothing else:
 
-- `Host` equal to `ROS_PLATFORM_HOST`: the console, `/platform`, `/api/mcp`, `/webhooks/…`, `/start`.
+- `Host` equal to `ROS_PLATFORM_HOST`: the console, `/platform`, `/api/mcp`, `/api/guest/mcp`, `/webhooks/…`, `/start`.
 - Any other `Host`: a venue's site. The host is looked up in the `domains` table. An unknown
   host is a 404. A venue cannot be reached by typing a path.
 
@@ -512,3 +512,44 @@ written on.
 - **Security review of an internet-facing deployment.** `docs/THREAT_MODEL.md` section 12 lists
   what is still open (secret vault, data-handling terms, consent wording, incident plan). Read it
   before holding real guests' data.
+
+## 12. The guests' assistant connection
+
+`https://<ROS_PLATFORM_HOST>/api/guest/mcp` is a public MCP endpoint (streamable HTTP, POST
+only, no sign-in). A guest's assistant uses it to find venues on your platform, read their
+menus and hours, book a table, and start a pickup order that the guest pays for on the venue's
+own order page. It is separate from `/api/mcp`, which needs a staff member's access key.
+Specification and what is built: `docs/modules/guest-plugin.md`.
+
+- **Which venues it shows.** Only a venue whose owner or manager switched on "Guests'
+  assistants" (module `guest-plugin`, on the console's Features page), with the venue and the
+  organisation live. Nothing else to configure: no environment variable, no key.
+- **Order links point at the venue's site** (`https://<venue host>/order?cart=…`), so the
+  venue needs Online ordering with pickup and the Website switched on, and its host must
+  resolve (section 8).
+- **Limits** are per address and per venue (`GUEST_LIMITS` in
+  `packages/modules/src/guest-plugin/tools.ts`). They rely on the proxy setting
+  `X-Forwarded-For` itself (section 8). Assistants call from their provider's servers, so one
+  address can stand for many guests.
+
+**Adding it to an assistant by its address.** What follows is from the vendor pages read for
+`content-engine/channel/research/agentic-os-connectors.md` (2026-10-01) and
+`selling-inside-assistants.md` (2026-10-04). None of it was tried against this endpoint.
+
+- **ChatGPT, developer mode.** Developer mode is for Plus, Pro, Business, Enterprise and Edu
+  accounts, on the web only, and a workspace admin may have to allow it. Turn it on at
+  Settings > Security and login > Developer mode; then on chatgpt.com/plugins press the plus
+  button and give a name, a description and the connection: the public endpoint above.
+  ChatGPT supports SSE and streaming HTTP for this, and asks the person to confirm write
+  actions by default. *Unverified here:* that ChatGPT accepts an endpoint with no
+  authentication, which MCP revision it speaks to this server, and how it presents the
+  two-step confirmation and the checkout link.
+- **Claude, custom connector.** On claude.ai: Customize > Connectors > "+" > Add custom
+  connector > paste the endpoint URL. Available on every plan (Free is limited to one custom
+  connector); on Team and Enterprise only an Owner can add it. Each tool can then be set to
+  Always allow, Needs approval or Blocked. *Unverified here:* that Claude accepts an endpoint
+  with no authentication, and how it shows the checkout link.
+
+Being listed in either directory (so a guest finds it without adding an address) needs
+OpenAI's developer verification and plugin review, and Anthropic's directory review. Neither
+has been started.

@@ -17,6 +17,10 @@ export type ArrayTypeImpl<T> = T extends ColumnType<infer S, infer I, infer U>
   ? ColumnType<S[], I[], U[]>
   : T[];
 
+export type BookingSource = "assistant" | "phone" | "staff" | "web";
+
+export type BookingStatus = "cancelled" | "completed" | "confirmed" | "declined" | "no_show" | "requested" | "seated";
+
 export type CampaignStatus = "approved" | "cancelled" | "draft" | "pending_approval" | "scheduled" | "sending" | "sent";
 
 export type ConnectionStatus = "connected" | "pending" | "revoked" | "unhealthy";
@@ -291,6 +295,50 @@ export interface BenchmarkBands {
   p75: Numeric | null;
   period_end: string;
   period_start: string;
+}
+
+export interface Bookings {
+  booked_for: Timestamp;
+  cancelled_at: Timestamp | null;
+  cancelled_by: string | null;
+  created_at: Generated<Timestamp>;
+  created_by_id: string | null;
+  created_by_kind: string;
+  customer_id: string | null;
+  decided_at: Timestamp | null;
+  duration_minutes: number;
+  finished_at: Timestamp | null;
+  guest_email: string | null;
+  guest_name: string | null;
+  guest_note: string | null;
+  guest_phone: string | null;
+  id: Generated<string>;
+  org_id: string;
+  over_capacity: Generated<boolean>;
+  party_size: number;
+  reference: string;
+  reminded_at: Timestamp | null;
+  request_key: string | null;
+  seated_at: Timestamp | null;
+  service_date: string;
+  service_name: string;
+  source: BookingSource;
+  staff_note: string | null;
+  status: BookingStatus;
+  status_reason: string | null;
+  updated_at: Generated<Timestamp>;
+  venue_id: string;
+}
+
+export interface BookingStatusHistory {
+  at: Timestamp;
+  booking_id: string;
+  by_id: string | null;
+  by_kind: string;
+  from_status: BookingStatus | null;
+  id: Generated<string>;
+  org_id: string;
+  to_status: BookingStatus;
 }
 
 export interface Brands {
@@ -1784,6 +1832,8 @@ export interface DB {
   approvals: Approvals;
   audit_log: AuditLog;
   benchmark_bands: BenchmarkBands;
+  booking_status_history: BookingStatusHistory;
+  bookings: Bookings;
   brands: Brands;
   campaigns: Campaigns;
   connections: Connections;

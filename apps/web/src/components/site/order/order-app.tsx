@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import type { menu } from '@ros/modules';
+import type { guestPlugin, menu } from '@ros/modules';
 import { cx, dietLabel, money } from '../format';
 import { track } from '../track';
 import { type CartLine, type PricedCart, type SlotBoard, api, loadCart, newKey, saveCart, toCartInput } from './api';
@@ -46,6 +46,8 @@ export interface OrderAppProps {
   initialCode: string | null;
   /** Show the receipt-by-email hint and the loyalty box at a table (qr config prompts). */
   prompts: { receiptEmail: boolean; loyalty: boolean };
+  /** A cart a guest's assistant built (`?cart=`), checked and priced again by the server, or why the link was refused. */
+  assistantCart?: guestPlugin.OpenCartResult | null;
 }
 
 const CONSENT_TITLES: Record<string, string> = {
@@ -243,8 +245,35 @@ export function OrderApp(props: OrderAppProps) {
   const idempotencyKey = useRef<string>(newKey());
   const checkoutRef = useRef<HTMLDivElement>(null);
 
+  const [handedNotice, setHandedNotice] = useState<{ tone: 'error' | 'info'; text: string } | null>(null);
+  const handed = useRef(props.assistantCart ?? null);
   useEffect(() => {
-    setLines(loadCart(storageKey));
+    const from = handed.current;
+    handed.current = null;
+    if (from?.ok) {
+      // A link from the guest's assistant replaces whatever this browser had in its cart.
+      setLines(from.cart.lines.map((l) => ({ ...l, note: null, key: newKey() })));
+      if (from.cart.slotStart) {
+        setSlot(from.cart.slotStart);
+        setDate(from.cart.slotDate);
+      }
+      setHandedNotice({ tone: 'info', text: ['Your order from your assistant is below, priced by us. Check it, then pay.', ...from.cart.notices].join(' ') });
+    } else if (from) {
+      setLines([]);
+      setHandedNotice({ tone: 'error', text: from.message });
+    } else {
+      setLines(loadCart(storageKey));
+    }
+    if (from) {
+      // The link has done its job; a reload keeps this browser's cart rather than opening the link again.
+      try {
+        const url = new URL(window.location.href);
+        url.searchParams.delete('cart');
+        window.history.replaceState(window.history.state, '', url.toString());
+      } catch {
+        // Leaving the address as it is changes nothing that matters.
+      }
+    }
     setLoaded(true);
   }, [storageKey]);
   useEffect(() => {
@@ -524,6 +553,11 @@ export function OrderApp(props: OrderAppProps) {
               </button>
             ) : null}
           </div>
+          {handedNotice ? (
+            <p role={handedNotice.tone === 'error' ? 'alert' : 'status'} className="s-notice" data-tone={handedNotice.tone === 'error' ? 'error' : undefined} data-assistant-cart={handedNotice.tone}>
+              {handedNotice.text}
+            </p>
+          ) : null}
           <p className="text-sm">
             {channel === 'dine-in-qr' ? `To your table${props.table?.label ? `: ${props.table.label}` : ''}, at ${venue.name}.` : channel === 'delivery' ? `Delivered from ${venue.name}.` : `Pickup from ${venue.name}.`}
           </p>

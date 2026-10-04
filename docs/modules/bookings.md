@@ -1,5 +1,59 @@
 # MODULE — `bookings` (dine-in reservations)
 
+## v1 as built (2026-10-04)
+
+Built: **capacity-based bookings without a floor plan**. Code in
+`packages/modules/src/bookings/` (its `CLAUDE.md` lists every function), migration
+`db/migrations/0750_bookings.sql`, tests `packages/modules/test/bookings/bookings.test.ts`.
+Everything below this section is the full design; v1 takes sections 2, 3, 5 and 6 in reduced
+form and skips sections 1, 4, 7 and the deposits of 8.
+
+**What exists**
+
+- **Services.** Per weekday periods in the module config (`service_periods`: name, days, start,
+  end, optional last booking time), or, when none are set, the venue's opening hours (one
+  service per opening period). A closed day in the hour exceptions closes bookings; special
+  hours narrow them. Slots every 15, 30 or 60 minutes.
+- **Capacity, computed per request (§3), never stored.** Three caps: guests starting in a slot
+  (kitchen pacing, the §2 `max_covers_per_slot`), guests per service, and optionally guests
+  seated at once using typical sitting lengths by party size (the §2 turn times, kept in config,
+  not a table). Plus: largest party online, booking window in days, cut-off before a slot. Time
+  is venue-local wall-clock, correct across daylight saving.
+- **Lifecycle (§5, reduced).** `bookings` + `booking_status_history`. requested → confirmed |
+  declined | cancelled; confirmed → cancelled | seated | no_show | completed; seated →
+  completed; no_show → seated. `auto_confirm` decides whether a booking within capacity is
+  confirmed at once or waits as a request. Every change audited and emitted (`booking.*`).
+- **Guest flow (§6, reduced).** `getBookingAvailability` → `requestBooking` (no account,
+  idempotent request key, capacity re-checked inside a per-venue lock) → a transactional email
+  or SMS (confirmed / request received) with a private link → `getBookingByToken`,
+  `cancelBookingByToken`. A reminder job before the booking (on by default, hours configurable).
+  Booking links the guest record (or makes one) and grants no consent.
+- **Staff.** List a day with covers per service, confirm, decline, cancel, seat, no-show,
+  finish, phone bookings (any time inside a service, caps overridable on purpose), totals
+  (covers, cancellations, no-show rate) for read-only staff.
+- **Assistant tools.** `bookings_today`, `bookings_list`, `booking_availability` (read);
+  `booking_confirm`, `booking_decline`, `booking_cancel`, `booking_add` (write, asked first).
+
+**Not in v1 (still the design below)**
+
+Floor plans, areas, tables and combinations (§1); table allocation and auto-suggest (§4); the
+host / service view (§7); deposits, card holds and cancellation windows (§8); waitlist; guest
+modify (v1: cancel and rebook); reminders at more than one offset; a buffer between sittings;
+occasion / dietary / allergy fields (v1 has one free-text guest note and one staff note); a
+per-customer no-show count; the §3 cache; linking a seated booking to a transaction.
+
+**What the web app will need (not built here)**
+
+- A public booking widget on the venue site: date → party size → times
+  (`getBookingAvailability`) → details → `requestBooking` with a request key made once per
+  attempt, showing `note`, `confirmation` and `phoneNumber` from the availability answer.
+- A manage page at `/booking/<token>` (the path `manageUrl` builds on the venue's primary
+  domain): `getBookingByToken`, a cancel button calling `cancelBookingByToken`.
+- A console screen: the day's book (`listBookings`), confirm / decline / cancel / seat / no-show
+  / finish, add a phone booking (`addBooking`), and `bookingSummary`. Settings already appear on
+  the generated Features form (arrays of service periods and sitting lengths may need a
+  hand-built editor).
+
 The most complex module. Restaurants judge a booking system on whether the host can run
 Friday night on it, not on whether the web form works.
 

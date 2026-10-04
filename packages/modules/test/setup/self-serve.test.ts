@@ -360,7 +360,7 @@ describe('setup: from an email address to a live venue, through the MCP server a
     expect(tooSmall.text).toMatch(/^Those settings for Online ordering are not valid\. slot_minutes: .*5/);
     const typo = await claude.call('plugin_enable', { plugin: 'ordering', settings: { slot_mins: 20 } });
     expect(typo.text).toContain('Online ordering has no setting called "slot_mins". Its settings are: pickup_enabled, slot_minutes,');
-    expect((await claude.call('plugin_enable', { plugin: 'bookings' })).text).toBe('There is no plugin called "bookings".');
+    expect((await claude.call('plugin_enable', { plugin: 'giftcards' })).text).toBe('There is no plugin called "giftcards".');
     expect((await claude.call('plugin_enable', { plugin: 'analytics' })).text).toBe('Analytics is always on: there is nothing to switch on.');
     expect((await claude.call('plugin_configure', { plugin: 'qr', settings: { show_prices: false } })).text).toContain('switched off here');
     // An assistant does not widen its own access, even where its owner would say yes.

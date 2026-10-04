@@ -1,3 +1,4 @@
+import { devGet } from './ops-helpers';
 import { afterAll, describe, expect, it } from 'vitest';
 import { approvals, campaigns } from '@ros/modules';
 import { BASE, closeBrowser, closeDb, db, eventually, newVisitor, orgBySlug, signInStaff } from './helpers';
@@ -58,7 +59,8 @@ describe('console: lifecycle flows', () => {
 
   it('an owner sets a flow to supervised; "run now" prepares batches that wait in Approvals and sends nothing; a rejected batch stays unsent', async () => {
     const group = await orgBySlug('oak-group');
-    const started = new Date(Date.now() - 1000);
+    // The web app runs on its own clock (ROS_CLOCK_START), not the wall clock: ask it what time it is.
+    const started = new Date(Date.parse((await devGet<{ now: string }>('clock')).now) - 1000);
     const v = await newVisitor();
     await signInStaff(v.page, 'owner@oak-group.test');
     await v.page.goto(`${BASE()}/console/campaigns/flows`);

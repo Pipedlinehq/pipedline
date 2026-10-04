@@ -1,7 +1,8 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { headers } from 'next/headers';
-import { delivery, identity, loyalty, menu, ordering, tenancy } from '@ros/modules';
+import { isAppError } from '@ros/core';
+import { delivery, guestPlugin, identity, loyalty, menu, ordering, tenancy } from '@ros/modules';
 import { app, sim } from '@/lib/runtime';
 import { getVisitor, onSite } from '@/lib/site';
 import { loadScope, optional, scopedHref, siteCall } from '@/lib/site-scope';
@@ -92,6 +93,9 @@ export async function OrderRoute({ host, venueSlug, searchParams }: { host: stri
 
   const code = typeof searchParams.code === 'string' ? searchParams.code.slice(0, 60) : null;
   const next = scopedHref(scope.basePath, '/order');
+  // A cart a guest's assistant built (docs/modules/guest-plugin.md): checked and priced again here, never trusted as sent.
+  const cartToken = !atTable && checkout.pickupEnabled && typeof searchParams.cart === 'string' ? searchParams.cart.slice(0, 4000) : null;
+  const assistantCart = cartToken ? await openAssistantCart(host, venue.id, cartToken) : null;
   return (
     <>
       {table ? <TableBanner table={table} scope={scope} /> : null}
@@ -119,9 +123,20 @@ export async function OrderRoute({ host, venueSlug, searchParams }: { host: stri
         signInHref={`/account/login?next=${encodeURIComponent(next)}`}
         initialCode={code}
         prompts={table?.prompts ?? { receiptEmail: true, loyalty: true }}
+        assistantCart={assistantCart}
       />
     </>
   );
+}
+
+async function openAssistantCart(host: string, venueId: string, token: string): Promise<guestPlugin.OpenCartResult> {
+  try {
+    return await onSite(host, (ctx) => guestPlugin.openCartLink(ctx, { venueId, token }));
+  } catch (e) {
+    // Too many tries from this device, say: said in words, with an empty cart.
+    if (isAppError(e)) return { ok: false, message: e.message };
+    throw e;
+  }
 }
 
 // ── /order/t/<token> ────────────────────────────────────────────────────────

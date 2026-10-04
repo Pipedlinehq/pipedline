@@ -26,7 +26,8 @@
 | Reviews & reputation | `reviews` | 4 | ⬜ | identity | later |
 | Specials board (the worked example in `PLUGINS.md`) | `specials` | — | built | — | `modules/specials.md` |
 | Kitchen display (full KDS) | `kds` | deferred | ⬜ | ordering | `modules/kds.md` |
-| Dine-in bookings | `bookings` | deferred | ⬜ | identity, comms | `modules/bookings.md` |
+| Dine-in bookings (v1: capacity, no floor plan) | `bookings` | — | v1 built | identity, comms | `modules/bookings.md` |
+| Guests' assistants (public MCP connection: find, menu, book, pickup cart paid on the venue's page) | `guest-plugin` | — | v1 built | menu, bookings, ordering, website | `modules/guest-plugin.md` |
 | POS / order entry | `pos` | deferred | ⬜ | kds, ledger, bookings | `modules/pos.md` |
 | Gift cards | `giftcards` | deferred | ⬜ | ledger | later |
 | Ingredients & COGS | `inventory` | deferred | ⬜ | ledger, ordering | later |

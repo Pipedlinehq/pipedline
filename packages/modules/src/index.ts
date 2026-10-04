@@ -18,6 +18,8 @@ export * as offers from './offers/index';
 export * as campaigns from './campaigns/index';
 export * as reviews from './reviews/index';
 export * as specials from './specials/index';
+export * as bookings from './bookings/index';
+export * as guestPlugin from './guest-plugin/index';
 export * as website from './website/index';
 export * as hub from './hub/index';
 export * as analytics from './analytics/index';

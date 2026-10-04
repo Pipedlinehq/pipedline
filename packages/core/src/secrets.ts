@@ -13,7 +13,7 @@ export interface SecretStore {
   replace(orgId: string, ref: string, value: string): Promise<void>;
   remove(orgId: string, ref: string): Promise<void>;
   /** A 32-byte key unique to the org, created on first use. Used to hash card identifiers per org. */
-  orgKey(orgId: string, name: 'identity_hmac' | 'unsubscribe_links'): Promise<Buffer>;
+  orgKey(orgId: string, name: 'identity_hmac' | 'unsubscribe_links' | 'booking_links' | 'assistant_links'): Promise<Buffer>;
 }
 
 export function tableSecretStore(app: App): SecretStore {

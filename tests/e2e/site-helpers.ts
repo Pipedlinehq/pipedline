@@ -8,6 +8,7 @@ import type { Ctx, Principal } from '@ros/core';
 import { type Fixture, loadFixture } from '@ros/fixtures';
 import { configFromEnv } from '@ros/runtime';
 import { createTestApp, fakeClock, type TestApp } from '../../packages/testkit/src/app';
+import { E2E_CLOCK_START } from './global-setup';
 import { type Watched, codeIn, getBrowser, inbox, siteUrl } from './helpers';
 
 export { siteUrl };
@@ -45,7 +46,8 @@ let fixture: Fixture | undefined;
 
 /** Run a service function as a fixture staff member (what they would do in the console). */
 export async function asStaff<T>(org: 'diner' | 'group', who: 'owner' | 'manager', fn: (ctx: Ctx) => Promise<T>): Promise<T> {
-  staffApp ??= createTestApp(process.env.E2E_DATABASE_URL!, { clock: fakeClock(new Date()), config: configFromEnv() });
+  // The same clock the web app runs on (ROS_CLOCK_START), or rows written here sort after the app's own.
+  staffApp ??= createTestApp(process.env.E2E_DATABASE_URL!, { clock: fakeClock(new Date(E2E_CLOCK_START)), config: configFromEnv() });
   fixture ??= await loadFixture(staffApp.app);
   const f = fixture[org];
   const principal: Principal = await f.as(who);
