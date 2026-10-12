@@ -49,6 +49,35 @@ export async function actApp<T>(fn: () => Promise<T>, opts: ActOptions<T> = {}):
   return { ok: true, message, data: r.data };
 }
 
+/**
+ * A bulk action (docs/CONSOLE_IA.md section 9, wave 1; pattern 4): the service function once per
+ * selected id, each in its own transaction, so one refusal leaves the others done and is named.
+ * Answers in words a venue can read: "2 orders accepted." or "2 orders accepted. One could not
+ * be: A7K2: …". The form carries `ids` and, beside them, `names` (how a refusal names each row).
+ */
+export async function bulkAct<T>(
+  fd: FormData,
+  fn: (ctx: Ctx, c: ConsoleContext, id: string) => Promise<T>,
+  opts: { done: (n: number) => string; revalidate?: string | string[] },
+): Promise<FormState> {
+  const ids = all(fd, 'ids');
+  const names = fd.getAll('names').map((v) => (typeof v === 'string' ? v : ''));
+  const nameOf = new Map(ids.map((id, i) => [id, names[i] || id.slice(0, 8)]));
+  const unique = [...new Set(ids)].slice(0, 200);
+  if (!unique.length) return { ok: false, error: 'Nothing is selected.' };
+  const failed: string[] = [];
+  let done = 0;
+  for (const id of unique) {
+    const r = await runAction(() => inConsole((ctx, c) => fn(ctx, c, id)));
+    if (r.ok) done += 1;
+    else failed.push(`${nameOf.get(id)}: ${r.error}`);
+  }
+  if (done) refresh(opts.revalidate);
+  if (!failed.length) return { ok: true, message: opts.done(done) };
+  if (!done) return { ok: false, error: failed.join(' ') };
+  return { ok: true, message: `${opts.done(done)} ${failed.length === 1 ? 'One could not be:' : `${failed.length} could not be:`} ${failed.join(' ')}` };
+}
+
 function refresh(paths: string | string[] | undefined): void {
   const list = paths === undefined ? ['/console'] : Array.isArray(paths) ? paths : [paths];
   for (const p of list) revalidatePath(p, p === '/console' ? 'layout' : 'page');

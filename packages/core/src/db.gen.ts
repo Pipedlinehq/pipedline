@@ -434,6 +434,19 @@ export interface ConsentWordings {
   version: string;
 }
 
+export interface ConsoleViews {
+  created_at: Generated<Timestamp>;
+  created_by_id: string | null;
+  filters: Generated<Json>;
+  id: Generated<string>;
+  name: string;
+  org_id: string;
+  page: string;
+  position: Generated<number>;
+  updated_at: Generated<Timestamp>;
+  venue_id: string;
+}
+
 export interface CustomerIdentities {
   created_at: Generated<Timestamp>;
   customer_id: string;
@@ -1612,6 +1625,20 @@ export interface Staff {
   user_id: string;
 }
 
+export interface StaffNotes {
+  author_id: string | null;
+  author_kind: string;
+  body: string;
+  created_at: Generated<Timestamp>;
+  deleted_at: Timestamp | null;
+  entity_id: string;
+  entity_type: string;
+  id: Generated<string>;
+  mentions: Generated<Json>;
+  org_id: string;
+  venue_id: string;
+}
+
 export interface StaffVenues {
   org_id: string;
   role: StaffRole;
@@ -1840,6 +1867,7 @@ export interface DB {
   consent_events: ConsentEvents;
   consent_wordings: ConsentWordings;
   consents: Consents;
+  console_views: ConsoleViews;
   customer_identities: CustomerIdentities;
   customer_merges: CustomerMerges;
   customer_touchpoints: CustomerTouchpoints;
@@ -1914,6 +1942,7 @@ export interface DB {
   side_effects: SideEffects;
   specials: Specials;
   staff: Staff;
+  staff_notes: StaffNotes;
   staff_venues: StaffVenues;
   support_access: SupportAccess;
   suppressions: Suppressions;

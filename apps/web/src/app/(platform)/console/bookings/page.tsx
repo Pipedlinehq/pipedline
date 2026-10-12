@@ -1,51 +1,102 @@
 import Link from 'next/link';
 import { GUEST_FACING_ROLES, addDays, localDate } from '@ros/core';
-import { bookings } from '@ros/modules';
+import { bookings, events } from '@ros/modules';
 import { atLeast, getConsole } from '@/lib/console';
 import { moduleOn } from '@/lib/console-modules';
 import { read } from '@/lib/console-read';
+import { resolveView, type ViewSpec } from '@/lib/console-views';
 import { app } from '@/lib/runtime';
+import { BulkSelection, RowBox, SelectAllBox, type BulkActionDef } from '@/components/console/bulk';
 import { ConfirmAction, InlineAction } from '@/components/console/confirm';
 import { BOOKING_SOURCE, BookingStatusBadge, covers } from '@/components/console/booking-bits';
 import { ModuleOff, NotForYourRole, ReadError } from '@/components/console/states';
+import { IndexViews } from '@/components/console/views';
 import { ActionForm, Badge, Card, Checkbox, Dialog, EmptyState, Field, GuestText, Input, LinkButton, PageHeader, SubmitButton, Table, Td, Textarea, Th, dayLabel, timeOnly } from '@/ui';
-import { addBooking, cancelBooking, completeBooking, confirmBooking, declineBooking, markNoShow, seatBooking } from './actions';
+import { addBooking, bulkBookings, cancelBooking, completeBooking, confirmBooking, declineBooking, markNoShow, seatBooking } from './actions';
+import { deleteView, renameView, saveView } from '../views-actions';
 
 export const metadata = { title: 'Bookings · Pipedline' };
 
-const ISO = /^\d{4}-\d{2}-\d{2}$/;
-const one = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v) ?? '';
 const WEEKDAY = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
+const SPEC: ViewSpec = {
+  page: 'bookings',
+  path: '/console/bookings',
+  landing: 'today',
+  defaults: [
+    { key: 'today', label: 'Today', filters: { when: 'today' } },
+    { key: 'tomorrow', label: 'Tomorrow', filters: { when: 'tomorrow' } },
+    { key: 'confirming', label: 'Needs confirming', filters: { when: 'next60', status: 'requested' } },
+    { key: 'week', label: 'This week', filters: { when: 'week' } },
+  ],
+  fields: [
+    {
+      key: 'when',
+      label: 'When',
+      kind: 'select',
+      options: [
+        { value: 'today', label: 'Today' },
+        { value: 'tomorrow', label: 'Tomorrow' },
+        { value: 'week', label: 'Next 7 days' },
+        { value: 'next60', label: 'Next 60 days' },
+        { value: 'past7', label: 'Last 7 days' },
+      ],
+    },
+    { key: 'date', label: 'Or one day', kind: 'date' },
+    { key: 'service', label: 'Service', kind: 'text', placeholder: 'Dinner' },
+    {
+      key: 'status',
+      label: 'Status',
+      kind: 'select',
+      options: [
+        { value: 'requested', label: 'Waiting for a yes' },
+        { value: 'confirmed', label: 'Confirmed' },
+        { value: 'seated', label: 'Seated' },
+        { value: 'completed', label: 'Finished' },
+        { value: 'no_show', label: 'No-show' },
+        { value: 'cancelled', label: 'Cancelled' },
+        { value: 'declined', label: 'Declined' },
+      ],
+    },
+    { key: 'show', label: 'Include', kind: 'select', options: [{ value: 'all', label: 'Declined, cancelled and finished too' }] },
+  ],
+};
+
 /**
- * The book (docs/CONSOLE_IA.md section 1, Bookings): one venue-local day at a time, covers per
- * service against the cap, every booking in time order, and the host's actions on each. Hosts,
- * front of house, managers and owners; the service refuses kitchen and read-only roles, so the
- * screen says so too. Guest-written text (names, notes) is rendered as text.
+ * The book (docs/CONSOLE_IA.md section 1, Bookings; section 9, wave 1): one venue-local day at a
+ * time with covers per service against the cap, or a run of days, with saved views ("Today",
+ * "Tomorrow", "Needs confirming", "This week") and the host's actions on each booking, singly or
+ * in bulk. Hosts, front of house, managers and owners; the service refuses kitchen and read-only
+ * roles, so the screen says so too. Guest-written text (names, notes) is rendered as text.
  */
 export default async function BookingsPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
-  const sp = await searchParams;
+  const raw = await searchParams;
   const c = await getConsole();
   const manager = atLeast(c.role, 'manager');
   if (!(await moduleOn('bookings'))) return <ModuleOff title="Bookings" what="Table bookings" canManage={manager} />;
   if (!manager && !GUEST_FACING_ROLES.includes(c.role)) return <NotForYourRole title="Bookings">The book holds guests' names and contact details, so it is for hosts, front of house and managers.</NotForYourRole>;
 
+  // A plain ?date= link (the day arrows, older links) is a filter in its own right.
+  const sp = raw.date && raw.f !== '1' ? { ...raw, f: '1' } : raw;
+  const saved = await read((ctx) => events.listConsoleViews(ctx, { venueId: c.venue.id, page: 'bookings' }));
+  const resolved = resolveView(SPEC, sp, saved.ok ? saved.data : []);
+  const f = resolved.filters;
   const tz = c.venue.timezone;
   const today = localDate(app().clock(), tz);
-  const date = ISO.test(one(sp.date)) ? one(sp.date) : today;
-  const service = one(sp.service) || undefined;
-  const showAll = one(sp.show) === 'all';
-  const day = await read((ctx) => bookings.listBookings(ctx, { venueId: c.venue.id, date, service, show: showAll ? 'all' : 'active' }));
+  const range = dayRange(f, today);
+  const status = f.status ? [f.status as bookings.BookingStatus] : undefined;
+  const day = await read((ctx) => bookings.listBookings(ctx, { venueId: c.venue.id, date: range.date, ...(range.to ? { to: range.to } : {}), service: f.service || undefined, show: f.show === 'all' ? 'all' : 'active', ...(status ? { status } : {}) }));
 
-  const link = (d: string, extra: Record<string, string | undefined> = {}) => {
-    const q = new URLSearchParams({ date: d });
-    const s = 'service' in extra ? extra.service : service;
-    if (s) q.set('service', s);
-    if ('show' in extra ? extra.show === 'all' : showAll) q.set('show', 'all');
-    return `/console/bookings?${q.toString()}`;
-  };
-  const weekday = WEEKDAY[new Date(`${date}T00:00:00Z`).getUTCDay()];
-  const dateWords = date === today ? `Today, ${weekday} ${dayLabel(date)}` : date === addDays(today, 1) ? `Tomorrow, ${weekday} ${dayLabel(date)}` : `${weekday} ${dayLabel(date)} ${date.slice(0, 4)}`;
+  const oneDay = !range.to;
+  const dayLink = (d: string) => `/console/bookings?view=${encodeURIComponent(resolved.current.key)}&f=1&date=${d}${f.service ? `&service=${encodeURIComponent(f.service)}` : ''}${f.show ? `&show=${f.show}` : ''}${f.status ? `&status=${f.status}` : ''}`;
+  const weekday = (d: string) => WEEKDAY[new Date(`${d}T00:00:00Z`).getUTCDay()];
+  const dateWords = oneDay
+    ? range.date === today
+      ? `Today, ${weekday(range.date)} ${dayLabel(range.date)}`
+      : range.date === addDays(today, 1)
+        ? `Tomorrow, ${weekday(range.date)} ${dayLabel(range.date)}`
+        : `${weekday(range.date)} ${dayLabel(range.date)} ${range.date.slice(0, 4)}`
+    : `${dayLabel(range.date)} to ${dayLabel(range.to!)}`;
 
   return (
     <>
@@ -60,7 +111,7 @@ export default async function BookingsPage({ searchParams }: { searchParams: Pro
                 <p className="text-sm text-ink-2">Confirmed straight away. Any time inside a service works, not only the times guests see; the caps still apply unless you book over them.</p>
                 <div className="grid grid-cols-2 gap-3">
                   <Field label="Date">
-                    <Input name="date" type="date" defaultValue={date} required />
+                    <Input name="date" type="date" defaultValue={range.date} required />
                   </Field>
                   <Field label="Time" hint="24-hour, e.g. 19:15">
                     <Input name="time" type="time" required step={300} />
@@ -91,153 +142,167 @@ export default async function BookingsPage({ searchParams }: { searchParams: Pro
         }
       />
 
-      <nav aria-label="Day" className="mb-5 flex flex-wrap items-center gap-2">
-        <LinkButton href={link(addDays(date, -1))} size="sm">
-          ← Day before
-        </LinkButton>
-        <LinkButton href={link(today)} size="sm" variant={date === today ? 'primary' : 'secondary'}>
-          Today
-        </LinkButton>
-        <LinkButton href={link(addDays(date, 1))} size="sm">
-          Day after →
-        </LinkButton>
-        <form method="get" role="search" aria-label="Choose a day" className="flex items-center gap-2">
-          {service ? <input type="hidden" name="service" value={service} /> : null}
-          {showAll ? <input type="hidden" name="show" value="all" /> : null}
-          <label className="sr-only" htmlFor="booking-date">
-            Date
-          </label>
-          <input id="booking-date" type="date" name="date" defaultValue={date} className="h-8 rounded-md border border-line-strong bg-surface px-2 text-sm text-ink" />
-          <button type="submit" className="h-8 rounded-md border border-line-strong bg-surface px-3 text-sm text-ink hover:bg-sunken">
-            Show
-          </button>
-        </form>
-        <span className="ml-auto text-sm">
-          <Link href={link(date, { show: showAll ? undefined : 'all' })} className="text-accent">
-            {showAll ? 'Hide declined, cancelled and finished' : 'Show every booking, including declined and cancelled'}
-          </Link>
-        </span>
-      </nav>
+      <IndexViews
+        page="bookings"
+        path="/console/bookings"
+        resolved={resolved}
+        fields={SPEC.fields}
+        canSave
+        saveAction={saveView}
+        renameAction={renameView}
+        deleteAction={deleteView}
+        aside={
+          oneDay ? (
+            <nav aria-label="Day" className="flex flex-wrap items-center gap-2">
+              <LinkButton href={dayLink(addDays(range.date, -1))} size="sm">
+                ← Day before
+              </LinkButton>
+              <LinkButton href={dayLink(addDays(range.date, 1))} size="sm">
+                Day after →
+              </LinkButton>
+            </nav>
+          ) : null
+        }
+      />
 
       {!day.ok ? (
         <ReadError message={day.error} />
       ) : (
         <div className="space-y-6">
-          <div className="grid grid-cols-2 gap-3 lg:grid-cols-4" data-testid="booking-services">
-            <div className="rounded-card border border-line bg-surface p-4">
-              <p className="text-sm text-ink-2">Whole day</p>
-              <p className="mt-1 font-display text-[1.75rem] font-medium tabular-nums text-ink">{day.data.totals.covers}</p>
-              <p className="text-xs text-ink-3">
-                covers across {day.data.totals.bookings} {day.data.totals.bookings === 1 ? 'booking' : 'bookings'}
-                {day.data.totals.requests ? `, ${day.data.totals.requests} waiting for a yes` : ''}
-              </p>
+          {oneDay ? (
+            <div className="grid grid-cols-2 gap-3 lg:grid-cols-4" data-testid="booking-services">
+              <div className="rounded-card border border-line bg-surface p-4">
+                <p className="text-sm text-ink-2">Whole day</p>
+                <p className="mt-1 font-display text-[1.75rem] font-medium tabular-nums text-ink">{day.data.totals.covers}</p>
+                <p className="text-xs text-ink-3">
+                  covers across {day.data.totals.bookings} {day.data.totals.bookings === 1 ? 'booking' : 'bookings'}
+                  {day.data.totals.requests ? `, ${day.data.totals.requests} waiting for a yes` : ''}
+                </p>
+              </div>
+              {day.data.services.map((s) => {
+                const on = f.service?.toLowerCase() === s.name.toLowerCase();
+                const href = `/console/bookings?view=${encodeURIComponent(resolved.current.key)}&f=1&date=${range.date}${on ? '' : `&service=${encodeURIComponent(s.name)}`}${f.show ? `&show=${f.show}` : ''}`;
+                return (
+                  <Link key={s.name} href={href} aria-current={on ? 'true' : undefined} className={`rounded-card border p-4 ${on ? 'border-accent bg-accent-soft' : 'border-line bg-surface hover:bg-sunken'}`}>
+                    <p className="flex items-center justify-between text-sm text-ink-2">
+                      <span>{s.name}</span>
+                      {s.startsAt && s.endsAt ? (
+                        <span className="text-xs text-ink-3">
+                          {timeOnly(s.startsAt, tz)}–{timeOnly(s.endsAt, tz)}
+                        </span>
+                      ) : null}
+                    </p>
+                    <p className="mt-1 font-display text-[1.75rem] font-medium tabular-nums text-ink">
+                      {s.covers}
+                      <span className="text-base text-ink-3"> / {s.maxCovers}</span>
+                    </p>
+                    <p className="text-xs text-ink-3">
+                      covers booked{s.requestedCovers ? `, ${s.requestedCovers} more waiting` : ''}
+                    </p>
+                  </Link>
+                );
+              })}
             </div>
-            {day.data.services.map((s) => {
-              const on = service?.toLowerCase() === s.name.toLowerCase();
-              return (
-                <Link key={s.name} href={link(date, { service: on ? undefined : s.name })} aria-current={on ? 'true' : undefined} className={`rounded-card border p-4 ${on ? 'border-accent bg-accent-soft' : 'border-line bg-surface hover:bg-sunken'}`}>
-                  <p className="flex items-center justify-between text-sm text-ink-2">
-                    <span>{s.name}</span>
-                    {s.startsAt && s.endsAt ? (
-                      <span className="text-xs text-ink-3">
-                        {timeOnly(s.startsAt, tz)}–{timeOnly(s.endsAt, tz)}
-                      </span>
-                    ) : null}
-                  </p>
-                  <p className="mt-1 font-display text-[1.75rem] font-medium tabular-nums text-ink">
-                    {s.covers}
-                    <span className="text-base text-ink-3"> / {s.maxCovers}</span>
-                  </p>
-                  <p className="text-xs text-ink-3">
-                    covers booked{s.requestedCovers ? `, ${s.requestedCovers} more waiting` : ''}
-                  </p>
-                </Link>
-              );
-            })}
-          </div>
+          ) : (
+            <p className="text-sm text-ink-2" data-testid="booking-run">
+              {day.data.totals.covers} covers across {day.data.totals.bookings} {day.data.totals.bookings === 1 ? 'booking' : 'bookings'} in these days
+              {day.data.totals.requests ? `, ${day.data.totals.requests} waiting for a yes` : ''}.
+            </p>
+          )}
 
           {day.data.bookings.length === 0 ? (
-            <EmptyState title={showAll ? 'Nothing in the book for this day' : 'Nothing live in the book for this day'}>
-              {showAll ? 'No booking was made for this day.' : 'Requests, confirmed and seated bookings appear here. Declined, cancelled and finished ones are behind the link above.'}
+            <EmptyState title="Nothing in the book for this view">
+              {f.status || f.show === 'all' ? 'No booking matches these filters.' : 'Requests, confirmed and seated bookings appear here. Declined, cancelled and finished ones show with “Include: declined, cancelled and finished too”.'}
             </EmptyState>
           ) : (
-            <Card padded={false} title={service ? `${service} bookings` : 'Bookings in time order'}>
-              <Table label="Bookings">
-                <thead>
-                  <tr>
-                    <Th>Time</Th>
-                    <Th>Guests</Th>
-                    <Th>Name</Th>
-                    <Th>Contact</Th>
-                    <Th>Notes</Th>
-                    <Th>From</Th>
-                    <Th>Status</Th>
-                    <Th>
-                      <span className="sr-only">Actions</span>
-                    </Th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {day.data.bookings.map((b) => (
-                    <tr key={b.id} data-testid={`booking-${b.reference}`} data-status={b.status}>
-                      <Td className="whitespace-nowrap">
-                        <span className="font-medium">{b.time}</span>
-                        <span className="block text-xs text-ink-3">{b.serviceName}</span>
-                      </Td>
-                      <Td numeric>{b.partySize}</Td>
-                      <Td>
-                        <GuestText>{b.guestName}</GuestText>
-                        <span className="block font-mono text-xs text-ink-3">{b.reference}</span>
-                      </Td>
-                      <Td className="text-xs">
-                        {b.guestPhone ? <span className="block">{b.guestPhone}</span> : null}
-                        {b.guestEmail ? <span className="block break-all">{b.guestEmail}</span> : null}
-                        {!b.guestPhone && !b.guestEmail ? <span className="text-ink-3">None given</span> : null}
-                      </Td>
-                      <Td className="max-w-xs text-xs">
-                        {b.guestNote ? (
-                          <p>
-                            Guest: <GuestText>{b.guestNote}</GuestText>
-                          </p>
-                        ) : null}
-                        {b.staffNote ? <p className="text-ink-2">Floor: {b.staffNote}</p> : null}
-                        {b.overCapacity ? <Badge tone="warn">Over capacity</Badge> : null}
-                        {b.statusReason ? <p className="text-ink-3">Reason: {b.statusReason}</p> : null}
-                      </Td>
-                      <Td className="text-xs text-ink-2">{BOOKING_SOURCE[b.source] ?? b.source}</Td>
-                      <Td>
-                        <BookingStatusBadge status={b.status} />
-                        {b.status === 'cancelled' && b.cancelledBy ? <span className="block text-xs text-ink-3">by {b.cancelledBy}</span> : null}
-                      </Td>
-                      <Td align="right">
-                        <div className="flex flex-wrap justify-end gap-1.5">
-                          {b.status === 'requested' ? (
-                            <>
-                              <InlineAction action={confirmBooking} hidden={{ bookingId: b.id }} label="Confirm" variant="primary" testId={`confirm-${b.reference}`} />
-                              <ConfirmAction trigger="Decline" title={`Decline ${b.reference}?`} action={declineBooking} hidden={{ bookingId: b.id }} confirmLabel="Decline" reason={{ label: 'Tell the guest why (optional)', required: false, minLength: 0 }} testId={`decline-${b.reference}`}>
+            <BulkSelection noun={{ one: 'booking', many: 'bookings' }} actions={BULK} action={bulkBookings} testId="bulk-bookings">
+              <Card padded={false} title={f.service ? `${f.service} bookings` : 'Bookings in time order'}>
+                <Table label="Bookings">
+                  <thead>
+                    <tr>
+                      <Th className="w-8">
+                        <SelectAllBox label="Select every booking on this page" />
+                      </Th>
+                      <Th>Time</Th>
+                      <Th>Guests</Th>
+                      <Th>Name</Th>
+                      <Th>Contact</Th>
+                      <Th>Notes</Th>
+                      <Th>From</Th>
+                      <Th>Status</Th>
+                      <Th>
+                        <span className="sr-only">Actions</span>
+                      </Th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {day.data.bookings.map((b) => (
+                      <tr key={b.id} data-testid={`booking-${b.reference}`} data-status={b.status}>
+                        <Td>
+                          <RowBox id={b.id} label={`Select booking ${b.reference}`} name={b.reference} />
+                        </Td>
+                        <Td className="whitespace-nowrap">
+                          {!oneDay ? <span className="block text-xs text-ink-3">{dayLabel(b.date)}</span> : null}
+                          <span className="font-medium">{b.time}</span>
+                          <span className="block text-xs text-ink-3">{b.serviceName}</span>
+                        </Td>
+                        <Td numeric>{b.partySize}</Td>
+                        <Td>
+                          <GuestText>{b.guestName}</GuestText>
+                          <Link href={`/console/bookings/${b.id}`} className="block font-mono text-xs text-accent">
+                            {b.reference}
+                          </Link>
+                        </Td>
+                        <Td className="text-xs">
+                          {b.guestPhone ? <span className="block">{b.guestPhone}</span> : null}
+                          {b.guestEmail ? <span className="block break-all">{b.guestEmail}</span> : null}
+                          {!b.guestPhone && !b.guestEmail ? <span className="text-ink-3">None given</span> : null}
+                        </Td>
+                        <Td className="max-w-xs text-xs">
+                          {b.guestNote ? (
+                            <p>
+                              Guest: <GuestText>{b.guestNote}</GuestText>
+                            </p>
+                          ) : null}
+                          {b.staffNote ? <p className="text-ink-2">Floor: {b.staffNote}</p> : null}
+                          {b.overCapacity ? <Badge tone="warn">Over capacity</Badge> : null}
+                          {b.statusReason ? <p className="text-ink-3">Reason: {b.statusReason}</p> : null}
+                        </Td>
+                        <Td className="text-xs text-ink-2">{BOOKING_SOURCE[b.source] ?? b.source}</Td>
+                        <Td>
+                          <BookingStatusBadge status={b.status} />
+                          {b.status === 'cancelled' && b.cancelledBy ? <span className="block text-xs text-ink-3">by {b.cancelledBy}</span> : null}
+                        </Td>
+                        <Td align="right">
+                          <div className="flex flex-wrap justify-end gap-1.5">
+                            {b.status === 'requested' ? (
+                              <>
+                                <InlineAction action={confirmBooking} hidden={{ bookingId: b.id }} label="Confirm" variant="primary" testId={`confirm-${b.reference}`} />
+                                <ConfirmAction trigger="Decline" title={`Decline ${b.reference}?`} action={declineBooking} hidden={{ bookingId: b.id }} confirmLabel="Decline" reason={{ label: 'Tell the guest why (optional)', required: false, minLength: 0 }} testId={`decline-${b.reference}`}>
+                                  <p>
+                                    The request for {covers(b.partySize)} at {b.time} is turned down and the guest is told. The covers stay free.
+                                  </p>
+                                </ConfirmAction>
+                              </>
+                            ) : null}
+                            {b.status === 'confirmed' || b.status === 'no_show' ? <InlineAction action={seatBooking} hidden={{ bookingId: b.id }} label="Seat" variant="primary" testId={`seat-${b.reference}`} /> : null}
+                            {b.status === 'confirmed' && b.startsAt <= app().clock() ? <InlineAction action={markNoShow} hidden={{ bookingId: b.id }} label="No-show" testId={`noshow-${b.reference}`} /> : null}
+                            {b.status === 'seated' || b.status === 'confirmed' ? <InlineAction action={completeBooking} hidden={{ bookingId: b.id }} label="Finish" testId={`finish-${b.reference}`} /> : null}
+                            {b.status === 'requested' || b.status === 'confirmed' ? (
+                              <ConfirmAction trigger="Cancel" title={`Cancel ${b.reference}?`} action={cancelBooking} hidden={{ bookingId: b.id }} confirmLabel="Cancel the booking" reason={{ label: 'Tell the guest why (optional)', required: false, minLength: 0 }} testId={`cancel-${b.reference}`}>
                                 <p>
-                                  The request for {covers(b.partySize)} at {b.time} is turned down and the guest is told. The covers stay free.
+                                  {covers(b.partySize)} at {b.time} on {dayLabel(b.date)} is cancelled for the guest and they are told. The covers go back at once.
                                 </p>
                               </ConfirmAction>
-                            </>
-                          ) : null}
-                          {b.status === 'confirmed' || b.status === 'no_show' ? <InlineAction action={seatBooking} hidden={{ bookingId: b.id }} label="Seat" variant="primary" testId={`seat-${b.reference}`} /> : null}
-                          {b.status === 'confirmed' && b.startsAt <= app().clock() ? <InlineAction action={markNoShow} hidden={{ bookingId: b.id }} label="No-show" testId={`noshow-${b.reference}`} /> : null}
-                          {b.status === 'seated' || b.status === 'confirmed' ? <InlineAction action={completeBooking} hidden={{ bookingId: b.id }} label="Finish" testId={`finish-${b.reference}`} /> : null}
-                          {b.status === 'requested' || b.status === 'confirmed' ? (
-                            <ConfirmAction trigger="Cancel" title={`Cancel ${b.reference}?`} action={cancelBooking} hidden={{ bookingId: b.id }} confirmLabel="Cancel the booking" reason={{ label: 'Tell the guest why (optional)', required: false, minLength: 0 }} testId={`cancel-${b.reference}`}>
-                              <p>
-                                {covers(b.partySize)} at {b.time} on {dayLabel(b.date)} is cancelled for the guest and they are told. The covers go back at once.
-                              </p>
-                            </ConfirmAction>
-                          ) : null}
-                        </div>
-                      </Td>
-                    </tr>
-                  ))}
-                </tbody>
-              </Table>
-            </Card>
+                            ) : null}
+                          </div>
+                        </Td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </Table>
+              </Card>
+            </BulkSelection>
           )}
           <p className="text-xs text-ink-3">
             Times are {tz}. Your assistant reads the same book with <span className="font-mono">bookings_today</span> and makes the same changes after your yes.
@@ -246,4 +311,29 @@ export default async function BookingsPage({ searchParams }: { searchParams: Pro
       )}
     </>
   );
+}
+
+const BULK: BulkActionDef[] = [
+  { key: 'confirm', verb: 'Confirm', body: 'The {nouns} {is} confirmed and each guest is told. Only requests waiting for a yes can be confirmed; any other is left as it is and named.' },
+  { key: 'seat', verb: 'Seat', body: 'The {nouns} {is} marked as seated.' },
+  { key: 'complete', verb: 'Finish', body: 'The {nouns} {is} marked as finished.' },
+  { key: 'decline', verb: 'Decline', destructive: true, reason: { label: 'Tell the guests why (optional)', required: false }, body: 'The {nouns} {is} turned down and each guest is told. The covers stay free. Only requests waiting for a yes can be declined.' },
+  { key: 'cancel', verb: 'Cancel', destructive: true, reason: { label: 'Tell the guests why (optional)', required: false }, body: 'The {nouns} {is} cancelled for the guests and they are told. The covers go back at once.' },
+];
+
+/** The first (and maybe last) venue-local day the filters ask for. */
+function dayRange(f: Record<string, string>, today: string): { date: string; to?: string } {
+  if (f.date) return { date: f.date };
+  switch (f.when) {
+    case 'tomorrow':
+      return { date: addDays(today, 1) };
+    case 'week':
+      return { date: today, to: addDays(today, 6) };
+    case 'next60':
+      return { date: today, to: addDays(today, 59) };
+    case 'past7':
+      return { date: addDays(today, -7), to: addDays(today, -1) };
+    default:
+      return { date: today };
+  }
 }

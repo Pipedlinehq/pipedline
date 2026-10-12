@@ -1,23 +1,68 @@
 import Link from 'next/link';
-import { offers } from '@ros/modules';
+import { events, offers } from '@ros/modules';
 import { atLeast, getConsole } from '@/lib/console';
 import { moduleOn } from '@/lib/console-modules';
 import { read } from '@/lib/console-read';
+import { resolveView, type ViewSpec } from '@/lib/console-views';
 import { ModuleOff, ReadError } from '@/components/console/states';
+import { IndexViews } from '@/components/console/views';
 import { Badge, Card, EmptyState, LinkButton, PageHeader, RankBars, StatTile, Table, Td, Th, compactMoney, money, percent } from '@/ui';
 import { OFFER_KINDS } from './offer-form';
+import { deleteView, renameView, saveView } from '../views-actions';
 
 export const metadata = { title: 'Offers · Pipedline' };
 
 const DAYS = [30, 90, 365] as const;
 
-export default async function OffersPage({ searchParams }: { searchParams: Promise<{ days?: string }> }) {
+/**
+ * Offers (docs/CONSOLE_IA.md section 9, wave 1): the list with saved views. Today an offer is on
+ * or off; "Scheduled" and "Expired" arrive with the offer dates in wave 2 (pattern 6), as two more
+ * default views in this spec and nothing else.
+ */
+const SPEC: ViewSpec = {
+  page: 'offers',
+  path: '/console/offers',
+  landing: 'active',
+  defaults: [
+    { key: 'active', label: 'Active', filters: { status: 'on' } },
+    { key: 'off', label: 'Switched off', filters: { status: 'off' } },
+    { key: 'all', label: 'All', filters: {} },
+  ],
+  fields: [
+    {
+      key: 'status',
+      label: 'Status',
+      kind: 'select',
+      options: [
+        { value: 'on', label: 'On' },
+        { value: 'off', label: 'Off' },
+      ],
+    },
+    { key: 'kind', label: 'Kind', kind: 'select', options: Object.entries(OFFER_KINDS).map(([value, label]) => ({ value, label })) },
+    {
+      key: 'days',
+      label: 'Codes issued in',
+      kind: 'select',
+      options: DAYS.map((d) => ({ value: String(d), label: `Last ${d} days` })),
+    },
+  ],
+};
+
+export default async function OffersPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const c = await getConsole();
   const manager = atLeast(c.role, 'manager');
   if (!(await moduleOn('offers'))) return <ModuleOff title="Offers" what="Offers" canManage={manager} />;
-  const sp = await searchParams;
-  const days = DAYS.find((d) => String(d) === sp.days) ?? 90;
-  const [list, summary] = await Promise.all([read((ctx) => offers.listOffers(ctx, { includeInactive: true })), read((ctx) => offers.getOffersSummary(ctx, { days }))]);
+  const raw = await searchParams;
+  // The old period links (?days=90) still mean what they meant.
+  const sp = raw.days && raw.f !== '1' ? { ...raw, f: '1', view: 'all' } : raw;
+  const saved = await read((ctx) => events.listConsoleViews(ctx, { venueId: c.venue.id, page: 'offers' }));
+  const resolved = resolveView(SPEC, sp, saved.ok ? saved.data : []);
+  const f = resolved.filters;
+  const days = DAYS.find((d) => String(d) === f.days) ?? 90;
+  const [list, summary] = await Promise.all([
+    read((ctx) => offers.listOffers(ctx, { includeInactive: true, active: f.status === 'on' ? true : f.status === 'off' ? false : undefined, kind: (f.kind as offers.OfferKind) || undefined })),
+    read((ctx) => offers.getOffersSummary(ctx, { days })),
+  ]);
   const stats = new Map(summary.ok ? summary.data.offers.map((s) => [s.offerId, s]) : []);
   const cur = c.org.currency;
   return (
@@ -27,14 +72,7 @@ export default async function OffersPage({ searchParams }: { searchParams: Promi
         description="Unique codes for welcome, come-back, voucher and creator offers. Every code is single use."
         actions={manager ? <LinkButton href="/console/offers/new" variant="primary">New offer</LinkButton> : undefined}
       />
-      <nav aria-label="Period" className="mb-4 flex flex-wrap items-center gap-2 text-sm">
-        <span className="text-ink-2">Codes issued in:</span>
-        {DAYS.map((d) => (
-          <Link key={d} href={`/console/offers?days=${d}`} aria-current={d === days ? 'page' : undefined} className={`rounded-md px-2.5 py-1 ${d === days ? 'bg-ink text-page' : 'text-ink-2 hover:bg-sunken'}`}>
-            Last {d} days
-          </Link>
-        ))}
-      </nav>
+      <IndexViews page="offers" path="/console/offers" resolved={resolved} fields={SPEC.fields} canSave={c.role !== 'read_only'} saveAction={saveView} renameAction={renameView} deleteAction={deleteView} aside={`Codes issued in the last ${days} days`} />
       {!summary.ok ? (
         <ReadError message={summary.error} />
       ) : (
@@ -57,12 +95,12 @@ export default async function OffersPage({ searchParams }: { searchParams: Promi
       {!list.ok ? (
         <ReadError message={list.error} />
       ) : list.data.length === 0 ? (
-        <EmptyState title="No offers yet" action={manager ? <LinkButton href="/console/offers/new">Create one</LinkButton> : undefined}>
-          {manager ? 'Create an offer, then issue codes for it or let a flow issue them.' : 'A manager can create offers.'}
+        <EmptyState title={Object.keys(f).length ? 'No offers match this view' : 'No offers yet'} action={manager && !Object.keys(f).length ? <LinkButton href="/console/offers/new">Create one</LinkButton> : undefined}>
+          {Object.keys(f).length ? 'Try another view, or clear a filter.' : manager ? 'Create an offer, then issue codes for it or let a flow issue them.' : 'A manager can create offers.'}
         </EmptyState>
       ) : (
         <Card padded={false}>
-          <Table>
+          <Table label="Offers">
             <thead>
               <tr>
                 <Th>Offer</Th>
@@ -77,7 +115,7 @@ export default async function OffersPage({ searchParams }: { searchParams: Promi
               {list.data.map((o) => {
                 const s = stats.get(o.id);
                 return (
-                  <tr key={o.id}>
+                  <tr key={o.id} data-testid={`offer-${o.id}`}>
                     <Td>
                       <Link href={`/console/offers/${o.id}`} className="font-medium text-accent hover:underline">
                         {o.name}

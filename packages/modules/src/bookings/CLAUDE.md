@@ -43,9 +43,12 @@ The token is not stored: `base64url(booking id ‖ HMAC(org key 'booking_links',
 
 Staff (host / front of house and above, via `requireStaff({ minRole: 'host', anyOf: GUEST_FACING_ROLES })`;
 kitchen and read-only are forbidden; a venue with no role, or another org's id, is not found):
-- `listBookings(ctx, { venueId, date?, service?, show?: 'active'|'all' })` → `BookingDay` with
+- `listBookings(ctx, { venueId, date?, to?, service?, show?: 'active'|'all', status?: BookingStatus[] })` → `BookingDay` with
   covers per service (`covers` = confirmed+seated+completed, `requestedCovers`, `maxCovers`) and totals.
-- `getBooking(ctx, { bookingId })`, `findBookingByReference(ctx, { venueId, reference })`.
+  `to` (at most 62 days after `date`) lists a run of days: `services` is then empty and `to` is echoed;
+  `status` keeps only those statuses whatever `show` says (the console's "Needs confirming" view).
+- `getBooking(ctx, { bookingId })`, `findBookingByReference(ctx, { venueId, reference })`,
+  `searchBookings(ctx, { venueId, q, limit? })` (guest name or reference contains `q`; soonest ahead first; the console's search).
 - `confirmBooking`, `declineBooking({ bookingId, reason? })`, `cancelBooking({ bookingId, reason? })`,
   `seatBooking`, `markNoShow` (only once `booked_for` has passed), `completeBooking`. The same
   change twice is one change; an illegal move is `invalid`. Moves: requested → confirmed |

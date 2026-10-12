@@ -8,6 +8,7 @@ export * from './tools';
 
 export {
   type ItemRow,
+  type MenuEditorFilter,
   type MenuEditorView,
   type MenuRow,
   type ModifierGroupRow,
@@ -25,6 +26,7 @@ export {
   deleteSection,
   getMenuEditor,
   itemInput,
+  menuEditorFilter,
   menuInput,
   modifierGroupInput,
   modifierInput,

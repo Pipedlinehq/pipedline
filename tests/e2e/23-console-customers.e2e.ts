@@ -42,8 +42,9 @@ describe('console: customers', () => {
     const v = await newVisitor();
     await signInStaff(v.page, 'host@oak-diner.test');
     await v.page.goto(`${BASE()}/console/customers`);
+    // The guest list's filter row: a search is one of its tokens.
     await v.page.fill('input[name=q]', email);
-    await v.page.getByRole('button', { name: 'Search' }).click();
+    await v.page.getByRole('button', { name: 'Apply' }).click();
     await v.page.getByRole('link', { name: `Ezra Erase${stamp}` }).click();
     await v.page.getByRole('heading', { name: `Ezra Erase${stamp}` }).waitFor();
 

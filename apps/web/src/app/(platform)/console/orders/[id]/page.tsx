@@ -9,6 +9,7 @@ import { NotHere } from '@/components/console/not-here';
 import { ConfirmAction, InlineAction } from '@/components/console/confirm';
 import { CHANNEL_LABEL, NEXT_STEP, OrderStatusBadge, PaymentBadge } from '@/components/console/order-bits';
 import { Facts, ModuleOff, ReadError } from '@/components/console/states';
+import { Timeline, type TimelineStep } from '@/components/console/timeline';
 import { Badge, Card, GuestText, LinkButton, PageHeader, Table, Td, Th, dateTime, money, timeOnly } from '@/ui';
 import { advanceOrder, clearAttention, refund, stopOrder } from '../actions';
 
@@ -226,34 +227,8 @@ export default async function OrderPage({ params }: { params: Promise<{ id: stri
               </p>
             ) : null}
           </Card>
-          <Card title="Timeline">
-            <ol className="space-y-2 text-sm" data-testid="order-timeline">
-              {timeline(o, refunds?.ok ? refunds.data : [], courier?.ok && courier.data ? courier.data : null).map((e, n) => (
-                <li key={n} className="flex justify-between gap-4" data-kind={e.kind}>
-                  <span className={e.at ? (e.tone === 'bad' ? 'text-bad' : 'text-ink') : 'text-ink-2'}>
-                    {e.label}
-                    {e.detail ? <span className="block text-xs text-ink-2">{e.detail}</span> : null}
-                  </span>
-                  <span className="shrink-0 tabular-nums text-ink-2">{e.at ? timeOnly(e.at, tz) : '–'}</span>
-                </li>
-              ))}
-            </ol>
-            {refunds && !refunds.ok ? <p className="mt-2 text-xs text-ink-2">Refunds could not be listed: {refunds.error}</p> : null}
-            {o.promisedAt ? <p className="mt-3 text-xs text-ink-3">Promised for {timeOnly(o.promisedAt, tz)}.</p> : null}
-            {o.pickupSlotStart ? (
-              <p className="mt-1 text-xs text-ink-3">
-                Pickup slot {timeOnly(o.pickupSlotStart, tz)}
-                {o.pickupSlotEnd ? `–${timeOnly(o.pickupSlotEnd, tz)}` : ''}
-              </p>
-            ) : o.requestedAsap ? (
-              <p className="mt-1 text-xs text-ink-3">Asked for as soon as possible.</p>
-            ) : null}
-            {o.rejectedReason ? (
-              <p className="mt-3 text-sm">
-                Reason given: <span className="text-ink-2">{o.rejectedReason}</span>
-              </p>
-            ) : null}
-          </Card>
+          <Timeline entityType="order" entityId={o.id} venueId={o.venueId} steps={timeline(o, refunds?.ok ? refunds.data : [], courier?.ok && courier.data ? courier.data : null)} testId="order-timeline" description="What happened to this order and the team's notes, newest first." />
+          {refunds && !refunds.ok ? <p className="text-xs text-ink-2">Refunds could not be listed: {refunds.error}</p> : null}
           {courier?.ok && courier.data ? (
             <Card title="Delivery">
               <Facts
@@ -278,8 +253,10 @@ export default async function OrderPage({ params }: { params: Promise<{ id: stri
             <Facts
               items={[
                 ['Placed', o.placedAt ? dateTime(o.placedAt, tz) : '–'],
+                ['Wanted', o.promisedAt ? `Promised for ${timeOnly(o.promisedAt, tz)}` : o.pickupSlotStart ? `Pickup slot ${timeOnly(o.pickupSlotStart, tz)}${o.pickupSlotEnd ? `–${timeOnly(o.pickupSlotEnd, tz)}` : ''}` : o.requestedAsap ? 'As soon as possible' : '–'],
                 ['Sent to the till', o.posOrderRef ?? 'Not sent'],
                 ['Flags', o.flags.length ? o.flags.join(', ') : 'None'],
+                ...(o.rejectedReason ? ([['Reason given', o.rejectedReason]] as Array<[string, string]>) : []),
               ]}
             />
           </Card>
@@ -298,13 +275,7 @@ function Row({ label, value, strong, muted }: { label: string; value: string; st
   );
 }
 
-interface TimelineEntry {
-  kind: 'step' | 'refund' | 'delivery';
-  label: string;
-  detail?: string;
-  at: Date | null;
-  tone?: 'bad';
-}
+type TimelineEntry = TimelineStep;
 
 const DELIVERY_STEP: Record<string, string> = {
   requested: 'Courier asked for',

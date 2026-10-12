@@ -308,6 +308,8 @@ export const listOrdersInput = z.object({
   tableSessionId: z.string().uuid().optional(),
   /** True = only orders flagged for staff to look at. */
   needsAttention: z.boolean().optional(),
+  /** Part of an order reference, as typed into a search box ("A7"). */
+  reference: z.string().trim().min(1).max(20).optional(),
   limit: z.number().int().min(1).max(200).default(50),
   /** created_at of the last row of the previous page. */
   before: z.date().optional(),
@@ -328,6 +330,7 @@ export async function listOrders(ctx: Ctx, raw: z.input<typeof listOrdersInput>)
   if (input.before) q = q.where('created_at', '<', input.before);
   if (input.tableSessionId) q = q.where('table_session_id', '=', input.tableSessionId);
   if (input.needsAttention) q = q.where('attention_at', 'is not', null);
+  if (input.reference) q = q.where('reference', 'ilike', `%${input.reference.replace(/[%_\\]/g, (m) => `\\${m}`)}%`);
   const orders = await q.execute();
   if (!orders.length) return [];
   const ids = orders.map((o) => o.id);

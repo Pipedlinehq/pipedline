@@ -82,7 +82,7 @@ export async function consoleSections(c: ConsoleContext): Promise<NavSection[]> 
     section(
       'settings',
       'Settings',
-      manager ? [{ href: '/console/settings/team', label: 'Team' }, { href: '/console/settings/screens', label: 'Kitchen screens' }, ...(c.isOwner ? [{ href: '/console/settings/privacy', label: 'Privacy and records' }] : [])] : [],
+      manager ? [{ href: '/console/settings/team', label: 'Team' }, { href: '/console/settings/screens', label: 'Kitchen screens' }, { href: '/console/activity', label: 'Activity' }, ...(c.isOwner ? [{ href: '/console/settings/privacy', label: 'Privacy and records' }] : [])] : [],
     ),
   ];
   return sections.filter((s): s is NavSection => s !== null);

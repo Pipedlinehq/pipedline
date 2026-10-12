@@ -7,6 +7,7 @@ import { read } from '@/lib/console-read';
 import { NotHere } from '@/components/console/not-here';
 import { ConfirmAction } from '@/components/console/confirm';
 import { Facts, NotForYourRole, ReadError } from '@/components/console/states';
+import { Timeline } from '@/components/console/timeline';
 import { ActionForm, Badge, Card, Field, GuestText, Input, LinkButton, PageHeader, SubmitButton, Table, Td, Textarea, Th, dateTime, money } from '@/ui';
 import { erase, saveCustomer, withdrawConsent } from '../actions';
 
@@ -77,7 +78,7 @@ export default async function CustomerPage({ params }: { params: Promise<{ id: s
                 </button>
               </form>
             ) : null}
-            <LinkButton href="/console/customers">Search</LinkButton>
+            <LinkButton href="/console/customers">All guests</LinkButton>
           </>
         }
       />
@@ -115,6 +116,8 @@ export default async function CustomerPage({ params }: { params: Promise<{ id: s
               <SubmitButton>Save details</SubmitButton>
             </ActionForm>
           </Card>
+
+          <Timeline entityType="customer" entityId={g.id} venueId={c.venue.id} testId="guest-timeline" description={`What this guest did and the team's notes, at ${c.venue.name}, newest first.`} />
 
           <Card title="Sales" description="From the ledger, at the venues you can see." padded={false}>
             {!sales.ok ? (

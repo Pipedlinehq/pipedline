@@ -1,8 +1,8 @@
 'use client';
 
-import { useActionState } from 'react';
-import { FormMessage, SubmitButton, type FormState } from '@/ui';
+import type { FormState } from '@/ui';
 import type { FieldSpec, RowColumn } from '@/lib/console-schema-form';
+import { GuardedForm } from './save-bar';
 
 const control = 'block w-full rounded-md border border-line-strong bg-surface px-3 text-sm text-ink disabled:bg-sunken disabled:text-ink-3';
 const DAY_WORDS: Record<string, string> = { sun: 'Sun', mon: 'Mon', tue: 'Tue', wed: 'Wed', thu: 'Thu', fri: 'Fri', sat: 'Sat' };
@@ -190,7 +190,10 @@ function Rows({ f, disabled }: { f: Extract<FieldSpec, { kind: 'rows' }>; disabl
   );
 }
 
-/** A module's options, generated from its config schema. Saving sends only these fields. */
+/**
+ * A module's options, generated from its config schema. Saving sends only these fields. The form
+ * carries the save bar: a changed field brings up Discard and Save, and leaving the page asks first.
+ */
 export function ModuleSettingsForm({
   moduleKey,
   fields,
@@ -204,19 +207,25 @@ export function ModuleSettingsForm({
   disabled?: boolean;
   submitLabel?: string;
 }) {
-  const [state, formAction] = useActionState(action, null);
   if (!fields.length) return <p className="text-sm text-ink-3">This feature has no options.</p>;
+  const body = (
+    <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
+      {fields.map((f) => (
+        <Field key={f.path} f={f} disabled={disabled} />
+      ))}
+    </div>
+  );
+  if (disabled) {
+    return (
+      <form className="space-y-4" data-testid={`settings-${moduleKey}`}>
+        {body}
+      </form>
+    );
+  }
   return (
-    <form action={formAction} className="space-y-4" data-testid={`settings-${moduleKey}`}>
+    <GuardedForm action={action} className="space-y-4" testId={`settings-${moduleKey}`} submitLabel={submitLabel}>
       <input type="hidden" name="module" value={moduleKey} />
-      <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
-        {fields.map((f) => (
-          <Field key={f.path} f={f} disabled={disabled} />
-        ))}
-      </div>
-      {state && !state.ok ? <FormMessage tone="error">{state.error}</FormMessage> : null}
-      {state?.ok ? <FormMessage tone="success">{state.message ?? 'Saved.'}</FormMessage> : null}
-      {disabled ? null : <SubmitButton size="sm">{submitLabel}</SubmitButton>}
-    </form>
+      {body}
+    </GuardedForm>
   );
 }

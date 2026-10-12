@@ -24,6 +24,7 @@ Other modules (the entry point for any surface that sees a guest):
 Console / guest:
 - `getCustomer(ctx, customerId)` — staff in `GUEST_FACING_ROLES`, the guest themself, or internal. `notes` is null for the guest. A merged id answers as the winner (except to a guest).
 - `searchCustomers(ctx, { q, limit? })` — staff in `GUEST_FACING_ROLES`; max 50.
+- `listCustomers(ctx, { venueId?, q?, createdSince?, consent?, regular?: { minVisits, withinDays }, lapsedDays?, limit? })` — the Customers index with its views (docs/CONSOLE_IA.md section 9, wave 1). Same roles. Rows are `CustomerListRow` = summary + `visits` and `lastVisitAt`, counted from `transactions` (a spine table identity may read), at `venueId` when given; `consent` keeps guests holding that consent now; most recent visit first; max 200.
 - `updateCustomer(ctx, customerId, input)` — same readers; a guest cannot set `notes`.
 - `getConsents(ctx, customerId)` — staff, the guest, or internal.
 - `grantConsent(ctx, input)` — refuses staff and devices; a guest only for self; `source: 'import'` only from internal code, needs `sourceDetail`, and never for `card_recognition`.

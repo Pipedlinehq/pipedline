@@ -225,15 +225,16 @@ describe('console: the order timeline and orders that need attention', () => {
     await v.page.goto(`${BASE()}/console/orders/${order.orderId}`);
     await lines.nth(1).waitFor();
     await v.page.screenshot({ path: `${SHOTS}/console-order-timeline.png`, fullPage: true });
+    // The timeline reads newest first (docs/CONSOLE_IA.md section 9): the refund of the rest, then the $2.
     const texts = await lines.allInnerTexts();
     expect(texts).toHaveLength(2);
-    expect(texts[0]).toContain('Refunded $2.00');
-    expect(texts[1]).toContain(`Refunded $${((o.total_cents - 200) / 100).toFixed(2)}`);
-    expect(texts[1]).toContain('Sent automatically');
-    expect(texts[1]).toContain('The kitchen had to close early tonight.');
-    // In the order things happened: created, placed, accepted, the two refunds.
+    expect(texts[1]).toContain('Refunded $2.00');
+    expect(texts[0]).toContain(`Refunded $${((o.total_cents - 200) / 100).toFixed(2)}`);
+    expect(texts[0]).toContain('Sent automatically');
+    expect(texts[0]).toContain('The kitchen had to close early tonight.');
+    // Newest first: the refunds came after the order was accepted, so they sit above it.
     const kinds = await v.page.locator('[data-testid=order-timeline] li').evaluateAll((els) => els.map((e) => `${e.getAttribute('data-kind')}:${e.textContent}`));
-    expect(kinds.findIndex((k) => k.startsWith('step:Accepted'))).toBeLessThan(kinds.findIndex((k) => k.startsWith('refund:')));
+    expect(kinds.findIndex((k) => k.startsWith('step:Accepted'))).toBeGreaterThan(kinds.findIndex((k) => k.startsWith('refund:')));
     // Kitchen staff see what happened to the money as well, without the guest's contact details.
     expect(v.problems).toEqual([]);
     await v.context.close();

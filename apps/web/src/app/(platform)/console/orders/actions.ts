@@ -2,7 +2,7 @@
 
 import { headers } from 'next/headers';
 import { ordering, qr } from '@ros/modules';
-import { act, actApp, cents, int, optText, text } from '@/lib/console-actions';
+import { act, actApp, bulkAct, cents, int, optText, text } from '@/lib/console-actions';
 import { getStaffSession } from '@/lib/staff';
 import { app } from '@/lib/runtime';
 import { money } from '@/ui/format';
@@ -82,4 +82,30 @@ export async function clearAttention(_prev: FormState, fd: FormData): Promise<Fo
     revalidate: ['/console/orders', `/console/orders/${orderId}`],
   });
   return r.ok ? { ok: true, message: r.message } : r;
+}
+
+const BULK_STATUS = new Set(['accepted', 'preparing', 'ready', 'completed', 'cancelled', 'rejected']);
+const BULK_WORDS: Record<string, (n: number) => string> = {
+  accepted: (n) => `${n} ${n === 1 ? 'order' : 'orders'} accepted.`,
+  preparing: (n) => `${n} ${n === 1 ? 'order' : 'orders'} marked as preparing.`,
+  ready: (n) => `${n} ${n === 1 ? 'order' : 'orders'} marked ready.`,
+  completed: (n) => `${n} ${n === 1 ? 'order' : 'orders'} completed.`,
+  cancelled: (n) => `${n} ${n === 1 ? 'order' : 'orders'} cancelled. The guests have been told${n === 1 ? '' : ''}; paid orders are being refunded.`,
+  rejected: (n) => `${n} ${n === 1 ? 'order' : 'orders'} rejected and refunded.`,
+};
+
+/**
+ * The bulk bar's action (docs/CONSOLE_IA.md section 9, wave 1): the same status change as the
+ * row button, once per selected order, each in its own transaction so one refusal (a paid order
+ * a host may not cancel, an order already further along) leaves the rest done and is named.
+ */
+export async function bulkOrders(_prev: FormState, fd: FormData): Promise<FormState> {
+  const status = text(fd, 'action');
+  if (!BULK_STATUS.has(status)) return { ok: false, error: 'That is not something that can be done to orders in bulk.' };
+  const reason = text(fd, 'reason');
+  if ((status === 'cancelled' || status === 'rejected') && reason.length < 3) return { ok: false, error: 'Say why: the guests are told this.' };
+  return bulkAct(fd, (ctx, _c, orderId) => ordering.updateOrderStatus(ctx, { orderId, status: status as 'accepted', ...(reason ? { reason } : {}) }), {
+    done: BULK_WORDS[status]!,
+    revalidate: '/console/orders',
+  });
 }

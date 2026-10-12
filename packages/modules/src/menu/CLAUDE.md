@@ -19,7 +19,7 @@ Console (manager at the venue, `requireStaff` `minRole: 'manager'`; each change 
 - `createItem(ctx, input)`, `updateItem(ctx, itemId, input)`, `deleteItem(ctx, itemId)` — `menu.edited` carries `price_changed` on update.
 - `setItemModifierGroups(ctx, itemId, groupIds)` — replaces the item's groups, in order.
 - `createModifierGroup` / `updateModifierGroup` / `deleteModifierGroup`, `createModifier` / `updateModifier` / `deleteModifier`.
-- `getMenuEditor(ctx, venueId)` — the whole editable tree; `minRole: 'read_only'`.
+- `getMenuEditor(ctx, venueId, filter?)` — the whole editable tree; `minRole: 'read_only'`. `filter` (`menuEditorFilter`: `q` part of an item name, `availability: 'off' | 'on'` (an 86 whose time has passed counts as on), `visibility: 'hidden_online' | 'online' | 'hidden_in_venue' | 'in_venue'`) narrows the items; menus and sections stay so a match shows where it sits. The console's Menu views and search use it.
 - Input schemas exported alongside: `menuInput`, `sectionInput`, `itemInput`, `modifierGroupInput`, `modifierInput` and their `update*Input` partials.
 
 Kitchen screen (`requireDevice(ctx, venueId, 'kitchen')`: a paired kitchen device, or staff with role `kitchen` or above):

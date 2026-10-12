@@ -3,6 +3,8 @@ import { getConsole } from '@/lib/console';
 import { consoleSections } from '@/lib/console-sections';
 import { Button } from '@/ui';
 import { FlashRegion } from '@/components/console/flash';
+import { ConsoleSearch } from '@/components/console/search';
+import { searchConsole } from './search-actions';
 import { signOut } from '../login/actions';
 import { selectVenue } from './actions';
 import { ConsoleNav, PhoneBar, VenueSelect } from './nav';
@@ -32,6 +34,9 @@ export default async function ConsoleLayout({ children }: { children: ReactNode 
           <div className="mt-2">
             <VenueSelect venues={venues} selected={c.venue.id} action={selectVenue} />
           </div>
+          <div className="mt-3">
+            <ConsoleSearch action={searchConsole} />
+          </div>
         </div>
         <div className="min-h-0 flex-1 overflow-y-auto px-3 py-4">
           <ConsoleNav sections={sections} />
@@ -51,6 +56,7 @@ export default async function ConsoleLayout({ children }: { children: ReactNode 
           <p className="truncate text-[0.6875rem] font-medium uppercase tracking-[0.08em] text-ink-3">{c.org.tradingName}</p>
           <VenueSelect venues={venues} selected={c.venue.id} action={selectVenue} id="venue-select-phone" />
         </div>
+        <ConsoleSearch action={searchConsole} compact />
         <span className="font-display text-base text-ink">Pipedline</span>
       </header>
 

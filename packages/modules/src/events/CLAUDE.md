@@ -5,7 +5,10 @@
 The first-party analytics stream: visitor sessions (with their first-touch attribution) and the
 append-only `events` table that every module's `track` writes to. Spine module, no dependencies.
 
-Tables (`eventsModule.tables`): `events` (`@append_only`), `visitor_sessions`.
+Tables (`eventsModule.tables`): `events` (`@append_only`), `visitor_sessions`, and since the console
+depth pass (migration `0760_console_views_notes.sql`) `console_views` (saved list views per venue)
+and `staff_notes` (the team's notes on a record, the timeline). The last two are the console's own
+record-keeping; they sit here because the activity stream is where a record's history is read from.
 
 `track`, `defineEvent`, `getEventDef` and `listEventDefs` live in core (`packages/core/src/events.ts`),
 not here; this module adds sessions, the browser beacon and session-aware tracking.
@@ -23,6 +26,26 @@ Other modules:
 - `eventDictionary()` — every declared event (name, module, description, `sent_by` browser/server, funnel, JSON-schema properties). Used by analytics.
 
 Also exported: `sessionInput`, `collectInput` zod schemas.
+
+Console (docs/CONSOLE_IA.md section 9, wave 1; the venue is always a request, checked by role):
+- Saved views (`views.ts`): `listConsoleViews(ctx, { venueId, page })` (any staff role at the venue);
+  `saveConsoleView(ctx, { venueId, page, name, filters, id? })` (kitchen, front of house, host,
+  manager, owner; not read-only; a name already used on that page at that venue is `invalid`; 30
+  per page; `id` updates), `renameConsoleView(ctx, { id, name })`, `deleteConsoleView(ctx, id)`
+  (another venue's or org's id is not found). `page` is one of `CONSOLE_VIEW_PAGES` (orders,
+  bookings, customers, menu, offers, activity). Filters are short string tokens, as a URL carries
+  them. Audited as `console.view_saved | view_updated | view_renamed | view_deleted`. Default views
+  are the console's code, never rows.
+- Staff notes (`notes.ts`): `listMentionableStaff(ctx, { venueId })` → active staff with a role at
+  the venue (plus owners) as `{ id, name }`; `addStaffNote(ctx, { venueId, entityType: order|booking|customer,
+  entityId, body })` → `StaffNoteView` with `mentions` (staff ids whose "@First" or "@First Last"
+  appears in the body; `findMentions` is exported), `authorKind` 'staff' or 'agent' (an assistant
+  writing for a person), `authorName`; `listStaffNotes(ctx, { venueId, entityType, entityId })`
+  newest first; `deleteStaffNote(ctx, noteId)` by the author or a manager (soft: `deleted_at`;
+  audited `note.removed`). Roles as for views. Bodies are staff-written text: render as text.
+- History (`history.ts`): `listEntityEvents(ctx, { venueId, entityType, entityId })` → the record's
+  own events from the stream (`properties->>order_id` / `booking_id`, or `customer_id`), newest first.
+  The audit side of a timeline is core's `listEntityAudit`; the activity log is core's `listActivity`.
 
 ## Hooks
 

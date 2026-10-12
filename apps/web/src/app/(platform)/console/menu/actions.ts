@@ -2,7 +2,7 @@
 
 import { redirect } from 'next/navigation';
 import { menu } from '@ros/modules';
-import { act, all, bool, cents, int, nullableText, optText, text } from '@/lib/console-actions';
+import { act, all, bool, bulkAct, cents, int, nullableText, optText, text } from '@/lib/console-actions';
 import type { FormState } from '@/ui/client';
 
 /**
@@ -30,6 +30,17 @@ export async function setAvailability(_: FormState, fd: FormData): Promise<FormS
       revalidate: PATHS,
     }),
   );
+}
+
+/** The bulk bar: 86 the selected items until the end of service, or put them back, one by one. */
+export async function bulkAvailability(_: FormState, fd: FormData): Promise<FormState> {
+  const what = text(fd, 'action');
+  if (what !== 'off' && what !== 'on') return { ok: false, error: 'That is not something that can be done to items in bulk.' };
+  const available = what === 'on';
+  return bulkAct(fd, (ctx, _c, itemId) => menu.setItemAvailability(ctx, { itemId, available, until: available ? null : 'end_of_service' }), {
+    done: (n) => (available ? `${n} ${n === 1 ? 'item is' : 'items are'} back on the menu.` : `${n} ${n === 1 ? 'item' : 'items'} 86'd until the end of service.`),
+    revalidate: PATHS,
+  });
 }
 
 export async function setModifierAvailability(_: FormState, fd: FormData): Promise<FormState> {

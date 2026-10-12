@@ -99,13 +99,17 @@ describe('accessibility: no serious or critical axe violations', () => {
     const campaign = await db().selectFrom('campaigns').select('id').where('org_id', '=', diner.orgId).executeTakeFirst();
     const sitePage = await db().selectFrom('pages').select('id').where('org_id', '=', diner.orgId).where('slug', '=', 'home').executeTakeFirst();
     const offer = await db().selectFrom('offers').select('id').where('org_id', '=', diner.orgId).executeTakeFirst();
+    const booking = await db().selectFrom('bookings').select('id').where('org_id', '=', diner.orgId).orderBy('booked_for', 'desc').executeTakeFirst();
 
     const v = await newVisitor();
     await signInStaff(v.page, 'manager@oak-diner.test');
     const paths = [
       '/console',
       '/console/bookings',
+      '/console/bookings?view=week',
+      booking ? `/console/bookings/${booking.id}` : null,
       '/console/bookings/settings',
+      '/console/activity',
       '/console/channels',
       '/console/plugins',
       '/console/assistant',

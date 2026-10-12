@@ -8,8 +8,8 @@ machine against a real Postgres and, for the browser suite, the production build
 
 | Check | Result | How to run |
 |---|---|---|
-| Service tests (real Postgres, seeded two-org fixture) | 823 pass, 90 files, strict seeding | `pnpm test` |
-| Browser end-to-end (production build, headless Chromium, database read back) | 144 pass, 35 files (includes an automated accessibility pass) | `pnpm e2e` |
+| Service tests (real Postgres, seeded two-org fixture) | 826 pass, 91 files, strict seeding | `pnpm test` |
+| Browser end-to-end (production build, headless Chromium, database read back) | 152 pass, 37 files (includes an automated accessibility pass) | `pnpm e2e` |
 | Typecheck, module boundaries, no tenant branching | clean | `pnpm gates` |
 
 What those cover: tenant isolation on every table; consent and card-identifier rules; idempotent

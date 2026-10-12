@@ -925,15 +925,50 @@ export async function findBookingByReference(ctx: Ctx, raw: z.input<typeof findB
   return view(row as BookingRow, venue.timezone);
 }
 
+export const searchBookingsInput = z.object({ venueId: z.string().uuid(), q: z.string().trim().min(2).max(100), limit: z.number().int().min(1).max(50).default(10) }).strict();
+
+/**
+ * Bookings at a venue whose guest name or reference contains the words typed (the console's
+ * search box). Soonest first among the ones still ahead, then the most recent past ones. Host or
+ * front of house and above.
+ */
+export async function searchBookings(ctx: Ctx, raw: z.input<typeof searchBookingsInput>): Promise<BookingView[]> {
+  const input = searchBookingsInput.parse(raw);
+  requireFrontOfHouse(ctx, input.venueId);
+  await assertModule(ctx, input.venueId, bookingsModule);
+  const venue = await getVenue(ctx, input.venueId);
+  const like = `%${input.q.replace(/[%_\\]/g, (m) => `\\${m}`)}%`;
+  const now = ctx.now();
+  const rows = (await ctx.db
+    .selectFrom('bookings')
+    .select(COLS)
+    .where('venue_id', '=', venue.id)
+    .where((eb) => eb.or([eb('guest_name', 'ilike', like), eb('reference', 'ilike', like)]))
+    .orderBy(sql`case when booked_for >= ${now} then 0 else 1 end`)
+    .orderBy(sql`abs(extract(epoch from (booked_for - ${now})))`)
+    .limit(input.limit)
+    .execute()) as BookingRow[];
+  return rows.map((r) => view(r, venue.timezone));
+}
+
+const STATUS_LIST = z.array(z.enum(['requested', 'confirmed', 'declined', 'cancelled', 'seated', 'no_show', 'completed'])).min(1).max(7);
+
 export const listBookingsInput = z
   .object({
     venueId: z.string().uuid(),
     /** Venue-local date. Defaults to today. */
     date: DAY.optional(),
+    /**
+     * The last venue-local day of a run of days ("this week"), inclusive; at most 62 days from
+     * `date`. Omitted: the one day. With a run, covers per service are not worked out.
+     */
+    to: DAY.optional(),
     /** One service by name, e.g. "Dinner". Omitted: the whole day. */
     service: z.string().trim().min(1).max(40).optional(),
     /** active = requests, confirmed and seated (the default); all = also declined, cancelled, no-shows and finished. */
     show: z.enum(['active', 'all']).default('active'),
+    /** Only these statuses, whatever `show` says ("needs confirming" = ['requested']). */
+    status: STATUS_LIST.optional(),
   })
   .strict();
 
@@ -954,6 +989,8 @@ export interface BookingDay {
   venueId: string;
   timezone: string;
   date: string;
+  /** The last day of the run asked for, when more than one day was. */
+  to?: string;
   services: ServiceCovers[];
   bookings: BookingView[];
   totals: { bookings: number; covers: number; requests: number; requestedCovers: number; noShows: number; cancelled: number };
@@ -972,14 +1009,22 @@ export async function listBookings(ctx: Ctx, raw: z.input<typeof listBookingsInp
   const cfg = await assertModule(ctx, input.venueId, bookingsModule);
   const venue = await getVenue(ctx, input.venueId);
   const date = input.date ?? localDate(ctx.now(), venue.timezone);
-  let q = ctx.db.selectFrom('bookings').select(COLS).where('venue_id', '=', venue.id).where('service_date', '=', date).orderBy('booked_for').orderBy('created_at');
+  const to = input.to && input.to > date ? input.to : undefined;
+  if (to && addDays(date, 62) < to) throw invalid('Ask for at most 62 days at a time.');
+  let q = ctx.db.selectFrom('bookings').select(COLS).where('venue_id', '=', venue.id).orderBy('booked_for').orderBy('created_at');
+  q = to ? q.where('service_date', '>=', date).where('service_date', '<=', to) : q.where('service_date', '=', date);
   if (input.service) q = q.where(sql`lower(service_name)`, '=', input.service.toLowerCase());
+  if (input.status) q = q.where('status', 'in', input.status);
   const rows = (await q.execute()) as BookingRow[];
 
-  const services: ServiceCovers[] = (await servicesOn(ctx, venue, date, cfg))
-    .filter((s) => !input.service || s.name.toLowerCase() === input.service.toLowerCase())
-    .map((s) => ({ name: s.name, startsAt: s.startsAt, endsAt: s.endsAt, covers: 0, requestedCovers: 0, bookings: 0, maxCovers: cfg.max_covers_per_service }));
+  // Covers per service are a one-day picture; a run of days lists the bookings and totals only.
+  const services: ServiceCovers[] = to
+    ? []
+    : (await servicesOn(ctx, venue, date, cfg))
+        .filter((s) => !input.service || s.name.toLowerCase() === input.service.toLowerCase())
+        .map((s) => ({ name: s.name, startsAt: s.startsAt, endsAt: s.endsAt, covers: 0, requestedCovers: 0, bookings: 0, maxCovers: cfg.max_covers_per_service }));
   for (const r of rows) {
+    if (to) break;
     let s = services.find((x) => x.name === r.service_name);
     if (!s) {
       // A service that is no longer in the settings (or a closed day) still shows what was booked for it.
@@ -994,11 +1039,12 @@ export async function listBookings(ctx: Ctx, raw: z.input<typeof listBookingsInp
       s.bookings += 1;
     }
   }
-  const shown = input.show === 'all' ? rows : rows.filter((r) => ACTIVE.includes(r.status));
+  const shown = input.status || input.show === 'all' ? rows : rows.filter((r) => ACTIVE.includes(r.status));
   return {
     venueId: venue.id,
     timezone: venue.timezone,
     date,
+    ...(to ? { to } : {}),
     services,
     bookings: shown.map((r) => view(r, venue.timezone)),
     totals: {

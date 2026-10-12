@@ -15,7 +15,7 @@ checkout, or it arrives on a till sale / is marked by staff. Redeemed once howev
 
 Console:
 - `saveOffer(ctx, offerInput)` — manager; create or update (with `id`). Switching off stops new codes; issued codes stay good. Audited.
-- `listOffers(ctx, { includeInactive? })`, `getOffer(ctx, offerId)` — `read_only`.
+- `listOffers(ctx, { includeInactive?, active?, kind? })`, `getOffer(ctx, offerId)` — `read_only`. `active: true|false` keeps switched-on or switched-off offers (the console's views), `kind` one kind.
 - `issueCode(ctx, { offerId, customerId?, source, notify? })` — internal (flows, campaigns) or manager. One live code per guest per offer (asking again returns it); `welcome` and `creator` are once per guest ever. No `customerId` = an unbound voucher code.
 - `issueCodes(ctx, { offerId, customerIds, source, notify? })` — internal or manager; bulk, capped by `bulkIssueMax`; safe to re-run.
 - `listCodes(ctx, listCodesInput)` — manager, or front of house when filtered to one `customerId`.

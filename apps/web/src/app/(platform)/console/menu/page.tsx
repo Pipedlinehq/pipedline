@@ -1,17 +1,55 @@
 import Link from 'next/link';
 import { atLeast, getConsole } from '@/lib/console';
 import { read } from '@/lib/console-read';
-import { menu } from '@ros/modules';
+import { resolveView, type ViewSpec } from '@/lib/console-views';
+import { events, menu } from '@ros/modules';
 import { ActionForm, Badge, Card, Dialog, EmptyState, LinkButton, PageHeader, SubmitButton, Table, Td, Th, dateTime, money } from '@/ui';
+import { BulkSelection, RowBox, SelectAllBox, type BulkActionDef } from '@/components/console/bulk';
 import { ConfirmAction, InlineAction } from '@/components/console/confirm';
 import { EightySix } from '@/components/console/eighty-six';
 import { GroupFields, ItemFields, MenuFields, SectionFields } from '@/components/console/menu-fields';
 import { ReadError } from '@/components/console/states';
-import { createGroup, createItem, createMenu, createSection, deleteMenu, deleteSection, setAvailability, setModifierAvailability, updateMenu, updateSection } from './actions';
+import { IndexViews } from '@/components/console/views';
+import { bulkAvailability, createGroup, createItem, createMenu, createSection, deleteMenu, deleteSection, setAvailability, setModifierAvailability, updateMenu, updateSection } from './actions';
+import { deleteView, renameView, saveView } from '../views-actions';
 
 export const metadata = { title: 'Menu · Pipedline' };
 
 const DAY = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+const SPEC: ViewSpec = {
+  page: 'menu',
+  path: '/console/menu',
+  landing: 'all',
+  defaults: [
+    { key: 'all', label: 'All', filters: {} },
+    { key: 'soldout', label: 'Sold out', filters: { availability: 'off' } },
+    { key: 'hidden', label: 'Hidden online', filters: { visibility: 'hidden_online' } },
+  ],
+  fields: [
+    { key: 'q', label: 'Item', kind: 'text', placeholder: 'Barramundi' },
+    {
+      key: 'availability',
+      label: 'On the menu',
+      kind: 'select',
+      options: [
+        { value: 'off', label: "86'd right now" },
+        { value: 'on', label: 'Available' },
+      ],
+    },
+    {
+      key: 'visibility',
+      label: 'Where it shows',
+      kind: 'select',
+      options: [
+        { value: 'hidden_online', label: 'Hidden online (site and ordering)' },
+        { value: 'online', label: 'Shown online' },
+        { value: 'hidden_in_venue', label: 'Hidden on the QR menu' },
+        { value: 'in_venue', label: 'Shown on the QR menu' },
+      ],
+    },
+  ],
+};
 
 function servedWhen(m: { availableDays: number[]; availableFrom: string | null; availableTo: string | null }): string {
   const days = m.availableDays.length === 7 ? 'Every day' : [1, 2, 3, 4, 5, 6, 0].filter((d) => m.availableDays.includes(d)).map((d) => DAY[d]).join(', ');
@@ -19,13 +57,29 @@ function servedWhen(m: { availableDays: number[]; availableFrom: string | null; 
   return `${days}, ${hours}`;
 }
 
-export default async function MenuPage({ searchParams }: { searchParams: Promise<{ q?: string; show?: string }> }) {
-  const { q = '', show } = await searchParams;
+const BULK: BulkActionDef[] = [
+  { key: 'off', verb: '86', title: '86 {n} {nouns}?', confirmLabel: '86 {nouns}', body: 'The {nouns} come off the website, the QR menu and online ordering at once, until the end of this service. Put {them} back the same way.' },
+  { key: 'on', verb: 'Put back on the menu', title: 'Put {n} {nouns} back on the menu?', confirmLabel: 'Put {nouns} back', body: 'The {nouns} go back on everywhere {them} {is} shown.' },
+];
+
+/**
+ * Menu (docs/CONSOLE_IA.md section 9, wave 1): the whole menu as the console edits it, with saved
+ * views ("Sold out", "Hidden online", "All"), filters applied by the menu service, and 86 / put
+ * back singly or in bulk.
+ */
+export default async function MenuPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
+  const raw = await searchParams;
   const c = await getConsole();
   const canEdit = atLeast(c.role, 'manager');
   // Kitchen, front of house and managers may 86; a read-only role only looks.
   const can86 = c.role !== 'read_only';
-  const r = await read((ctx) => menu.getMenuEditor(ctx, c.venue.id).then((v) => ({ v, now: ctx.now() })));
+  // The old search box's address (?q=, ?show=86) still means what it meant.
+  const sp = raw.f !== '1' && (raw.q || raw.show === '86') ? { ...raw, f: '1', ...(raw.show === '86' ? { availability: 'off' } : {}) } : raw;
+  const saved = await read((ctx) => events.listConsoleViews(ctx, { venueId: c.venue.id, page: 'menu' }));
+  const resolved = resolveView(SPEC, sp, saved.ok ? saved.data : []);
+  const f = resolved.filters;
+  const filtering = Object.keys(f).length > 0;
+  const r = await read((ctx) => menu.getMenuEditor(ctx, c.venue.id, { q: f.q || undefined, availability: (f.availability as 'off') || undefined, visibility: (f.visibility as 'hidden_online') || undefined }).then((v) => ({ v, now: ctx.now() })));
   if (!r.ok) {
     return (
       <>
@@ -35,56 +89,16 @@ export default async function MenuPage({ searchParams }: { searchParams: Promise
     );
   }
   const { v, now } = r.data;
-  const needle = q.trim().toLowerCase();
-  const offOnly = show === '86';
   const isOff = (i: { isAvailable: boolean; unavailableUntil: Date | null }) => !i.isAvailable && !(i.unavailableUntil && i.unavailableUntil <= now);
   const allItems = v.menus.flatMap((m) => m.sections.flatMap((s) => s.items));
-  const offCount = allItems.filter(isOff).length;
-  const keep = (i: { name: string; isAvailable: boolean; unavailableUntil: Date | null }) => (!needle || i.name.toLowerCase().includes(needle)) && (!offOnly || isOff(i));
   const groupName = new Map(v.modifierGroups.map((g) => [g.id, g.name]));
 
-  return (
+  const body = (
     <>
-      <PageHeader
-        title="Menu"
-        description={
-          can86
-            ? '86 an item and it comes off the website, the QR menu and online ordering at once. Put it back the same way.'
-            : 'The menu as guests see it, with what is off right now.'
-        }
-        actions={
-          canEdit ? (
-            <>
-              <LinkButton href="/console/menu/import">Import a menu</LinkButton>
-              <Dialog trigger="New menu" title="New menu" triggerVariant="primary">
-              <ActionForm action={createMenu} resetOnSuccess>
-                <MenuFields />
-                <div className="mt-4 flex justify-end">
-                  <SubmitButton>Create menu</SubmitButton>
-                </div>
-              </ActionForm>
-            </Dialog>
-            </>
-          ) : null
-        }
-      />
-
-      <form method="get" role="search" className="mb-6 flex flex-wrap items-end gap-3 rounded-lg border border-line bg-surface px-4 py-3">
-        <label className="flex flex-col gap-1 text-xs font-medium text-ink-2">
-          Find an item
-          <input name="q" defaultValue={q} className="h-9 w-64 max-w-full rounded-md border border-line-strong bg-surface px-2 text-sm text-ink" />
-        </label>
-        <label className="flex items-center gap-2 pb-2 text-sm text-ink">
-          <input type="checkbox" name="show" value="86" defaultChecked={offOnly} className="size-4 accent-ink" />
-          Only what is off ({offCount})
-        </label>
-        <button type="submit" className="h-9 rounded-md border border-line-strong bg-surface px-3 text-sm font-medium text-ink hover:bg-sunken">
-          Show
-        </button>
-      </form>
-
       {v.menus.length === 0 ? (
         <EmptyState title="No menu yet">{canEdit ? 'Create a menu, add sections, then add items to them.' : 'A manager has not set up a menu for this venue yet.'}</EmptyState>
+      ) : filtering && allItems.length === 0 ? (
+        <EmptyState title="No items match this view">Try another view, or clear a filter.</EmptyState>
       ) : (
         <div className="space-y-6">
           {v.menus.map((m) => (
@@ -127,8 +141,7 @@ export default async function MenuPage({ searchParams }: { searchParams: Promise
                 <p className="px-5 py-6 text-sm text-ink-2">No sections in this menu yet.</p>
               ) : (
                 m.sections.map((s) => {
-                  const items = s.items.filter(keep);
-                  if ((needle || offOnly) && items.length === 0) return null;
+                  if (filtering && s.items.length === 0) return null;
                   return (
                     <section key={s.id} className="border-t border-line first:border-t-0" aria-labelledby={`sec-${s.id}`}>
                       <div className="flex flex-wrap items-center justify-between gap-2 px-5 pb-1 pt-4">
@@ -161,12 +174,17 @@ export default async function MenuPage({ searchParams }: { searchParams: Promise
                           </div>
                         ) : null}
                       </div>
-                      {items.length === 0 ? (
+                      {s.items.length === 0 ? (
                         <p className="px-5 pb-4 text-sm text-ink-3">No items in this section.</p>
                       ) : (
-                        <Table>
+                        <Table label={`${s.name} items`}>
                           <thead>
                             <tr>
+                              {can86 ? (
+                                <Th className="w-8">
+                                  <span className="sr-only">Select</span>
+                                </Th>
+                              ) : null}
                               <Th>Item</Th>
                               <Th align="right">Price</Th>
                               <Th>Status</Th>
@@ -176,10 +194,15 @@ export default async function MenuPage({ searchParams }: { searchParams: Promise
                             </tr>
                           </thead>
                           <tbody>
-                            {items.map((i) => {
+                            {s.items.map((i) => {
                               const off = isOff(i);
                               return (
                                 <tr key={i.id} data-testid={`item-row-${i.id}`}>
+                                  {can86 ? (
+                                    <Td>
+                                      <RowBox id={i.id} label={`Select ${i.name}`} name={i.name} />
+                                    </Td>
+                                  ) : null}
                                   <Td>
                                     {canEdit ? (
                                       <Link href={`/console/menu/items/${i.id}`} className="font-medium text-ink underline-offset-2 hover:underline">
@@ -194,6 +217,7 @@ export default async function MenuPage({ searchParams }: { searchParams: Promise
                                         i.dietaryTags.length ? i.dietaryTags.join(', ') : null,
                                         i.modifierGroupIds.length ? `Choices: ${i.modifierGroupIds.map((g) => groupName.get(g) ?? '').filter(Boolean).join(', ')}` : null,
                                         !i.isVisibleOnline ? 'not shown online' : null,
+                                        !i.isVisibleInVenue ? 'not on the QR menu' : null,
                                       ]
                                         .filter(Boolean)
                                         .join(' · ')}
@@ -224,6 +248,46 @@ export default async function MenuPage({ searchParams }: { searchParams: Promise
             </Card>
           ))}
         </div>
+      )}
+    </>
+  );
+
+  return (
+    <>
+      <PageHeader
+        title="Menu"
+        description={
+          can86
+            ? '86 an item and it comes off the website, the QR menu and online ordering at once. Put it back the same way.'
+            : 'The menu as guests see it, with what is off right now.'
+        }
+        actions={
+          canEdit ? (
+            <>
+              <LinkButton href="/console/menu/import">Import a menu</LinkButton>
+              <Dialog trigger="New menu" title="New menu" triggerVariant="primary">
+                <ActionForm action={createMenu} resetOnSuccess>
+                  <MenuFields />
+                  <div className="mt-4 flex justify-end">
+                    <SubmitButton>Create menu</SubmitButton>
+                  </div>
+                </ActionForm>
+              </Dialog>
+            </>
+          ) : null
+        }
+      />
+
+      {can86 ? (
+        <BulkSelection noun={{ one: 'item', many: 'items' }} actions={BULK} action={bulkAvailability} testId="bulk-menu">
+          <IndexViews page="menu" path="/console/menu" resolved={resolved} fields={SPEC.fields} canSave saveAction={saveView} renameAction={renameView} deleteAction={deleteView} aside={<Shown count={allItems.length} selectable />} />
+          {body}
+        </BulkSelection>
+      ) : (
+        <>
+          <IndexViews page="menu" path="/console/menu" resolved={resolved} fields={SPEC.fields} canSave={false} saveAction={saveView} renameAction={renameView} deleteAction={deleteView} aside={<Shown count={allItems.length} />} />
+          {body}
+        </>
       )}
 
       <div className="mt-8">
@@ -270,7 +334,12 @@ export default async function MenuPage({ searchParams }: { searchParams: Promise
                       {g.modifiers.map((mod) => (
                         <li key={mod.id} className="flex items-center gap-2 rounded-md border border-line px-2 py-1 text-sm">
                           <span className={mod.isAvailable ? 'text-ink' : 'text-ink-3 line-through'}>{mod.name}</span>
-                          {mod.priceDeltaCents ? <span className="text-xs text-ink-3">{mod.priceDeltaCents > 0 ? '+' : ''}{money(mod.priceDeltaCents)}</span> : null}
+                          {mod.priceDeltaCents ? (
+                            <span className="text-xs text-ink-3">
+                              {mod.priceDeltaCents > 0 ? '+' : ''}
+                              {money(mod.priceDeltaCents)}
+                            </span>
+                          ) : null}
                           {can86 ? (
                             <InlineAction
                               action={setModifierAvailability}
@@ -294,6 +363,24 @@ export default async function MenuPage({ searchParams }: { searchParams: Promise
           )}
         </Card>
       </div>
+    </>
+  );
+}
+
+/** The menu is several tables; one "select everything shown" lives in the filter row instead of a header cell. */
+function Shown({ count, selectable = false }: { count: number; selectable?: boolean }) {
+  return (
+    <>
+      {count} {count === 1 ? 'item' : 'items'}
+      {selectable && count ? (
+        <>
+          {' · '}
+          <label className="inline-flex items-center gap-1.5">
+            <SelectAllBox label="Select every item shown" />
+            select all shown
+          </label>
+        </>
+      ) : null}
     </>
   );
 }

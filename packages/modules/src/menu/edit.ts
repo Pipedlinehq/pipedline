@@ -680,13 +680,39 @@ export interface MenuEditorView {
   modifierGroups: Array<ModifierGroupRow & { modifiers: ModifierRow[] }>;
 }
 
-/** The whole menu as the console edits it: hidden sections, 86'd items and inactive menus included. */
-export async function getMenuEditor(ctx: Ctx, venueId: string): Promise<MenuEditorView> {
+/** What the console's Menu views ask for: items by name, by whether they are 86'd, by where they show. */
+export const menuEditorFilter = z
+  .object({
+    /** Part of an item's name. */
+    q: z.string().trim().max(100).optional(),
+    /** off = 86'd right now (an 86 whose time has passed counts as back on); on = available. */
+    availability: z.enum(['off', 'on']).optional(),
+    /** Where the item shows: hidden_online = not on the website or ordering; hidden_in_venue = not on the QR menu. */
+    visibility: z.enum(['hidden_online', 'hidden_in_venue', 'online', 'in_venue']).optional(),
+  })
+  .strict();
+export type MenuEditorFilter = z.infer<typeof menuEditorFilter>;
+
+/**
+ * The whole menu as the console edits it: hidden sections, 86'd items and inactive menus
+ * included. With a filter, only the items that match are listed (menus and sections stay, so
+ * the person sees where a match sits).
+ */
+export async function getMenuEditor(ctx: Ctx, venueId: string, rawFilter: z.input<typeof menuEditorFilter> = {}): Promise<MenuEditorView> {
   const id = z.string().uuid().parse(venueId);
+  const filter = menuEditorFilter.parse(rawFilter);
   requireStaff(ctx, { venueId: id, minRole: 'read_only' });
   const menus = await ctx.db.selectFrom('menus').select(MENU_COLS).where('venue_id', '=', id).where('deleted_at', 'is', null).orderBy('sort_order').orderBy('created_at').execute();
   const sections = await ctx.db.selectFrom('menu_sections').select(SECTION_COLS).where('venue_id', '=', id).where('deleted_at', 'is', null).orderBy('sort_order').execute();
-  const items = await ctx.db.selectFrom('menu_items').select(ITEM_COLS).where('venue_id', '=', id).where('deleted_at', 'is', null).orderBy('sort_order').execute();
+  let itemsQ = ctx.db.selectFrom('menu_items').select(ITEM_COLS).where('venue_id', '=', id).where('deleted_at', 'is', null).orderBy('sort_order');
+  if (filter.q) itemsQ = itemsQ.where('name', 'ilike', `%${filter.q.replace(/[%_\\]/g, (m) => `\\${m}`)}%`);
+  if (filter.availability === 'off') itemsQ = itemsQ.where('is_available', '=', false).where((eb) => eb.or([eb('unavailable_until', 'is', null), eb('unavailable_until', '>', ctx.now())]));
+  if (filter.availability === 'on') itemsQ = itemsQ.where((eb) => eb.or([eb('is_available', '=', true), eb('unavailable_until', '<=', ctx.now())]));
+  if (filter.visibility === 'hidden_online') itemsQ = itemsQ.where('is_visible_online', '=', false);
+  if (filter.visibility === 'online') itemsQ = itemsQ.where('is_visible_online', '=', true);
+  if (filter.visibility === 'hidden_in_venue') itemsQ = itemsQ.where('is_visible_in_venue', '=', false);
+  if (filter.visibility === 'in_venue') itemsQ = itemsQ.where('is_visible_in_venue', '=', true);
+  const items = await itemsQ.execute();
   const links = items.length
     ? await ctx.db.selectFrom('item_modifier_groups').select(['item_id', 'group_id']).where('item_id', 'in', items.map((i) => i.id)).orderBy('sort_order').execute()
     : [];

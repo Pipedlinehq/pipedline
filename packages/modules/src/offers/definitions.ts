@@ -247,12 +247,17 @@ export async function saveOffer(ctx: Ctx, raw: z.input<typeof offerInput>): Prom
   return offerView(after, await orgCurrency(ctx));
 }
 
-/** Every offer, for the console. */
-export async function listOffers(ctx: Ctx, opts: { includeInactive?: boolean } = {}): Promise<OfferView[]> {
+/**
+ * Every offer, for the console. `active` narrows to switched-on or switched-off offers (and
+ * implies `includeInactive` for the latter); `kind` to one kind of offer.
+ */
+export async function listOffers(ctx: Ctx, opts: { includeInactive?: boolean; active?: boolean; kind?: OfferKind } = {}): Promise<OfferView[]> {
   requireStaff(ctx, { minRole: 'read_only' });
   await assertOffersOn(ctx);
   let q = ctx.db.selectFrom('offers').select(OFFER_COLS).orderBy('created_at', 'desc');
-  if (!opts.includeInactive) q = q.where('is_active', '=', true);
+  if (opts.active !== undefined) q = q.where('is_active', '=', opts.active);
+  else if (!opts.includeInactive) q = q.where('is_active', '=', true);
+  if (opts.kind) q = q.where('kind', '=', opts.kind);
   const currency = await orgCurrency(ctx);
   return (await q.execute()).map((o) => offerView(toOfferRow(o), currency));
 }

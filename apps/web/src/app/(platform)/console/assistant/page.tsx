@@ -197,7 +197,16 @@ export default async function AssistantPage() {
             )}
           </Card>
 
-          <Card title="What your assistant did" description="Which connection called which tool, and how it went. Arguments and answers are never kept." padded={false}>
+          <Card
+            title="What your assistant did"
+            description="Which connection called which tool, and how it went. Arguments and answers are never kept."
+            padded={false}
+            actions={
+              <LinkButton href="/console/activity?view=assistant" size="sm">
+                Everything, in Activity
+              </LinkButton>
+            }
+          >
             {!calls.ok ? (
               <div className="p-5">
                 <ReadError message={calls.error} />

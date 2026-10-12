@@ -26,7 +26,7 @@ Guest-facing / public (no role check unless stated; org from the host):
 - `orderByTrackingToken(ctx, token)` — `{ orderId, venueId, channel }`.
 
 Console:
-- `getOrder(ctx, orderId)`, `listOrders(ctx, listOrdersInput)` — `read_only`.
+- `getOrder(ctx, orderId)`, `listOrders(ctx, listOrdersInput)` — `read_only`. Filters: `statuses`, `live`, `channel`, `from`/`to`, `tableSessionId`, `needsAttention`, and `reference` (part of a reference, case-insensitive; the console's views and search).
 - `updateOrderStatus(ctx, { orderId, status, reason? })` — `requireDevice(.., 'kitchen')` (paired screen or staff `kitchen`+); cancelling a paid order needs a manager. Reject/cancel needs a reason, enqueues `ordering.refund` if paid, notifies the guest. `acceptOrder`, `rejectOrder` wrap it.
 - `refundOrder(app, actor, { orderId, amountCents?, reason, idempotencyKey })` — app-level, manager.
 - `clearOrderAttention(ctx, orderId)` — manager.

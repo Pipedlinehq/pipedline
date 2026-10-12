@@ -123,6 +123,97 @@ export async function searchCustomers(ctx: Ctx, args: { q: string; limit?: numbe
   }));
 }
 
+export const listCustomersInput = z
+  .object({
+    /** Visits are counted at this venue; omitted, at every venue the caller can see. */
+    venueId: z.string().uuid().optional(),
+    /** Name, email or phone, as a search box would send it. */
+    q: z.string().trim().max(100).optional(),
+    /** Guests first known on or after this instant ("new this month"). */
+    createdSince: z.date().optional(),
+    /** Guests holding this consent right now ("said yes to email"). */
+    consent: z.enum(['marketing_email', 'marketing_sms', 'card_recognition', 'ad_platform_sharing']).optional(),
+    /** Guests with at least this many sales in the last `withinDays` days ("regulars": 3 in 90). */
+    regular: z.object({ minVisits: z.number().int().min(1).max(100), withinDays: z.number().int().min(1).max(730) }).optional(),
+    /** Guests who have been in before but not for this many days ("lapsed 60+ days"). */
+    lapsedDays: z.number().int().min(1).max(730).optional(),
+    limit: z.number().int().min(1).max(200).default(50),
+  })
+  .strict();
+
+export interface CustomerListRow extends CustomerSummary {
+  /** Sales in the ledger tied to this guest (at the venue asked for, or everywhere the caller sees). */
+  visits: number;
+  lastVisitAt: Date | null;
+}
+
+/**
+ * Guests as a list (docs/CONSOLE_IA.md section 9, wave 1: the Customers index with its views).
+ * Staff who deal with guests, and managers. Visits come from the sales ledger (a spine table
+ * identity may read); consent from the guest's own current consents. Most recent visit first.
+ */
+export async function listCustomers(ctx: Ctx, raw: z.input<typeof listCustomersInput> = {}): Promise<CustomerListRow[]> {
+  const input = listCustomersInput.parse(raw);
+  requireStaff(ctx, { ...(input.venueId ? { venueId: input.venueId } : {}), anyOf: GUEST_FACING_ROLES });
+  const now = ctx.now();
+  const visits = ctx.db
+    .selectFrom('transactions')
+    .select((eb) => ['customer_id', eb.fn.count<string>('id').as('visits'), eb.fn.max('occurred_at').as('last_visit_at')])
+    .where('customer_id', 'is not', null)
+    .where('status', '<>', 'voided')
+    .$if(!!input.venueId, (qb) => qb.where('venue_id', '=', input.venueId!))
+    .groupBy('customer_id')
+    .as('v');
+  let q = ctx.db
+    .selectFrom('customers as c')
+    .leftJoin(visits, 'v.customer_id', 'c.id')
+    .select(['c.id', 'c.first_name', 'c.last_name', 'c.primary_email', 'c.primary_phone', 'c.allergy_notes', 'c.created_at', 'v.visits', 'v.last_visit_at'])
+    .where('c.status', '=', 'active')
+    .orderBy(sql`coalesce(v.last_visit_at, c.created_at)`, 'desc')
+    .limit(input.limit);
+  const needle = input.q?.trim() ?? '';
+  if (needle.length >= 2) {
+    const email = normaliseEmail(needle);
+    const phone = /\d{6,}/.test(needle.replace(/\D/g, '')) ? normalisePhone(needle) : null;
+    const like = `%${needle.replace(/[%_\\]/g, (m) => `\\${m}`)}%`;
+    q = q.where((eb) =>
+      eb.or([
+        ...(email ? [eb('c.primary_email', '=', email)] : []),
+        ...(phone ? [eb('c.primary_phone', '=', phone)] : []),
+        eb('c.first_name', 'ilike', like),
+        eb('c.last_name', 'ilike', like),
+        eb('c.primary_email', 'ilike', like),
+        eb(sql<string>`coalesce(c.first_name, '') || ' ' || coalesce(c.last_name, '')`, 'ilike', like),
+      ]),
+    );
+  }
+  if (input.createdSince) q = q.where('c.created_at', '>=', input.createdSince);
+  if (input.consent) {
+    q = q.where((eb) => eb.exists(eb.selectFrom('consents as k').select('k.id').whereRef('k.customer_id', '=', 'c.id').where('k.purpose', '=', input.consent!).where('k.status', '=', 'granted')));
+  }
+  if (input.regular) {
+    const since = new Date(now.getTime() - input.regular.withinDays * 86_400_000);
+    const min = input.regular.minVisits;
+    const atVenue = input.venueId ? sql` and t.venue_id = ${input.venueId}` : sql``;
+    q = q.where(sql<boolean>`(select count(*) from transactions t where t.customer_id = c.id and t.status <> 'voided' and t.occurred_at >= ${since}${atVenue}) >= ${min}`);
+  }
+  if (input.lapsedDays) {
+    const cutoff = new Date(now.getTime() - input.lapsedDays * 86_400_000);
+    q = q.where('v.last_visit_at', 'is not', null).where('v.last_visit_at', '<', cutoff);
+  }
+  const rows = await q.execute();
+  return rows.map((r) => ({
+    id: r.id,
+    name: [r.first_name, r.last_name].filter(Boolean).join(' ') || 'Guest',
+    email: r.primary_email,
+    phone: r.primary_phone,
+    allergyNotes: r.allergy_notes,
+    createdAt: r.created_at,
+    visits: Number(r.visits ?? 0),
+    lastVisitAt: r.last_visit_at ?? null,
+  }));
+}
+
 export const updateCustomerInput = z
   .object({
     firstName: z.string().max(100).nullable(),

@@ -4,6 +4,7 @@ import { atLeast, getConsole } from '@/lib/console';
 import { read } from '@/lib/console-read';
 import { ActionForm, Badge, Card, Field, Input, PageHeader, Select, SubmitButton, Table, Td, Th, dayLabel } from '@/ui';
 import { InlineAction } from '@/components/console/confirm';
+import { GuardedForm } from '@/components/console/save-bar';
 import { NotForYourRole, ReadError } from '@/components/console/states';
 import { addException, removeException, saveTradingHours, saveVenue } from './actions';
 
@@ -51,7 +52,7 @@ export default async function HoursPage() {
       <PageHeader title="Hours" description={`When ${venue.name} is open. Online ordering, pickup slots, the site and “86 until end of service” all read these. Times are ${venue.timezone.replace('_', ' ')}.`} />
       <div className="grid gap-6 xl:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
         <Card title="Weekly hours" description="A day with no periods is closed. A period that ends after midnight closes the next morning (e.g. 17:00 to 01:00).">
-          <ActionForm action={saveTradingHours}>
+          <GuardedForm action={saveTradingHours} submitLabel="Save weekly hours" testId="weekly-hours">
             <div className="space-y-4">
               {WEEK.map(([d, name]) => {
                 const periods = hours.filter((h) => h.dayOfWeek === d);
@@ -88,10 +89,7 @@ export default async function HoursPage() {
               })}
             </div>
             <p className="mt-4 text-xs text-ink-3">Clear both times of a period to remove it. The service name (lunch, dinner) is optional.</p>
-            <div className="mt-4 flex justify-end">
-              <SubmitButton>Save weekly hours</SubmitButton>
-            </div>
-          </ActionForm>
+          </GuardedForm>
         </Card>
 
         <div className="space-y-6">
@@ -159,7 +157,7 @@ export default async function HoursPage() {
           </Card>
 
           <Card title="Venue details" description="Shown on the site, in structured data search engines read, and on receipts.">
-            <ActionForm action={saveVenue}>
+            <GuardedForm action={saveVenue} submitLabel="Save details" testId="venue-details">
               <div className="space-y-3">
                 <Field label="Name">
                   <Input name="name" required maxLength={200} defaultValue={venue.name} />
@@ -198,10 +196,7 @@ export default async function HoursPage() {
                   </Field>
                 </div>
               </div>
-              <div className="mt-4 flex justify-end">
-                <SubmitButton>Save details</SubmitButton>
-              </div>
-            </ActionForm>
+            </GuardedForm>
           </Card>
         </div>
       </div>
