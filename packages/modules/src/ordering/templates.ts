@@ -107,6 +107,72 @@ export const orderRefundedSms = defineTemplate({
   variables: refunded,
 });
 
+// ── Didn't finish: the one nudge (pattern 7). Transactional: about the guest's own order, no marketing. ──
+
+const nudge = z.object({
+  first_name: z.string().max(100),
+  venue_name: z.string(),
+  reference: z.string(),
+  /** One line per item, names only. */
+  summary: z.string().max(6000),
+  total: z.string(),
+  /** "Finish paying here: <link>" while the order can still be paid, or "Order again at <link>" once it has lapsed. */
+  resume_line: z.string(),
+});
+
+export const orderNudgeEmail = defineTemplate({
+  key: 'order.nudge',
+  channel: 'email',
+  kind: 'transactional',
+  description: 'The one nudge staff may send about an order a guest started but did not pay for: what was in it and where to finish or start again. Never a second one, never an offer.',
+  subject: 'Your order at {{venue_name}} was not finished',
+  body: 'Hi {{first_name}},\n\nYou started an order at {{venue_name}} but it was not paid, so nothing went to the kitchen.\n\n{{summary}}\n\nTotal: {{total}}\n\n{{resume_line}}\n\nIf you did not mean to order, there is nothing to do.\n\nOrder {{reference}}',
+  variables: nudge,
+});
+
+export const orderNudgeSms = defineTemplate({
+  key: 'order.nudge',
+  channel: 'sms',
+  kind: 'transactional',
+  description: 'The nudge about an unfinished order, for a guest who gave only a phone number.',
+  body: '{{venue_name}}: your order {{reference}} ({{total}}) was not paid, so nothing went to the kitchen. {{resume_line}}',
+  variables: nudge,
+});
+
+// ── Phone and function orders: the pay link (pattern 10). ──
+
+const payLink = z.object({
+  first_name: z.string().max(100),
+  venue_name: z.string(),
+  reference: z.string(),
+  summary: z.string().max(6000),
+  total: z.string(),
+  /** e.g. "Pickup at 6:15 pm, Sat 10 Oct" or "For your function on Sat 10 Oct". */
+  when_line: z.string(),
+  pay_url: z.string(),
+  /** "The link works until Fri 9 Oct." or empty. */
+  hold_line: z.string(),
+});
+
+export const payLinkEmail = defineTemplate({
+  key: 'order.pay_link',
+  channel: 'email',
+  kind: 'transactional',
+  description: 'Sent when staff send the guest a link to pay for a phone or function order: what is in it, the total, and the venue\'s own page to pay on.',
+  subject: 'Pay for your order {{reference}} at {{venue_name}}',
+  body: 'Hi {{first_name}},\n\nHere is your order from {{venue_name}}, ready to pay.\n\n{{summary}}\n\nTotal: {{total}}\n{{when_line}}\n\nPay here: {{pay_url}}\n{{hold_line}}\n\nOrder {{reference}}',
+  variables: payLink,
+});
+
+export const payLinkSms = defineTemplate({
+  key: 'order.pay_link',
+  channel: 'sms',
+  kind: 'transactional',
+  description: 'The pay link for a guest who gave only a phone number.',
+  body: '{{venue_name}}: your order {{reference}} comes to {{total}}. {{when_line}} Pay here: {{pay_url}} {{hold_line}}',
+  variables: payLink,
+});
+
 const kitchen = z.object({
   venue_name: z.string(),
   reference: z.string(),

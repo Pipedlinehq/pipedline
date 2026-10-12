@@ -34,13 +34,38 @@ form and skips sections 1, 4, 7 and the deposits of 8.
 - **Assistant tools.** `bookings_today`, `bookings_list`, `booking_availability` (read);
   `booking_confirm`, `booking_decline`, `booking_cancel`, `booking_add` (write, asked first).
 
+**Console depth, wave 2 (2026-10-13; `docs/CONSOLE_IA.md` section 9, pattern 7 and the "Came from"
+badge of pattern 2)**
+
+- **Came from.** `source` (web · assistant · phone · staff) is a badge on every booking row and
+  the booking page, and a filter on the book.
+- **No-show count per guest.** `BookingView.noShowCount`: how many of the guest's bookings across
+  the organisation ended `no_show` (by `customer_id`; 0 with no record). Shown read-only on booking
+  rows and the booking page. Not stored: counted when the book is read.
+- **Didn't finish.** The flow records no "started" step (a request is written whole; the guest
+  plugin's two-step is a signed token, never a row), so the unfinished booking is **a request the
+  venue never answered inside its window**: `request_window_hours` (config, default 24), or the
+  booking's own time if sooner. `bookings.detect_abandoned` is booked per request when it is made;
+  if still `requested` it sets `abandoned_at` and tracks `booking.abandoned`.
+  `listUnfinishedBookings`, `nudgeUnfinishedBooking` (host, front of house, managers): one
+  transactional `booking.unanswered` (still waiting; how to reach the venue; the guest's own cancel
+  link), `nudge_sent_at` / `nudge_message_id` / `nudge_status`; audited `bookings.nudge_sent`,
+  event `booking.nudged`; a second nudge is `conflict`; no consent recorded; bounced/complained
+  addresses are not written to. `applyStatus` sets `recovered_at` (event `booking.recovered`) when
+  an unfinished request becomes confirmed, seated or completed. `bookings.purge_unfinished`
+  (daily): three months after `abandoned_at`, never recovered → guest name, contact, notes and
+  `customer_id` cleared, `purged_at` set, audited `bookings.unfinished_purged`, event
+  `booking.purged`. Tool `booking_nudge`; `bookings_list` rows carry `came_from`, `no_shows_before`
+  and `unfinished`. Migration `0770`; tests `packages/modules/test/orders-depth/bookings-unfinished.test.ts`.
+
 **Not in v1 (still the design below)**
 
 Floor plans, areas, tables and combinations (§1); table allocation and auto-suggest (§4); the
 host / service view (§7); deposits, card holds and cancellation windows (§8); waitlist; guest
 modify (v1: cancel and rebook); reminders at more than one offset; a buffer between sittings;
-occasion / dietary / allergy fields (v1 has one free-text guest note and one staff note); a
-per-customer no-show count; the §3 cache; linking a seated booking to a transaction.
+occasion / dietary / allergy fields (v1 has one free-text guest note and one staff note); the §3
+cache; linking a seated booking to a transaction. (The per-customer no-show count is now shown,
+counted at read time rather than stored on the guest record.)
 
 **What the web app will need (not built here)**
 

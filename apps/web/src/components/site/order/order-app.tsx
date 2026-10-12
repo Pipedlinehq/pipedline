@@ -446,6 +446,8 @@ export function OrderApp(props: OrderAppProps) {
           note: note.trim() || null,
           consents: consents.filter((c) => ticked[c.purpose]).map((c) => ({ purpose: c.purpose, wordingVersion: c.version })),
           flags: joinLoyalty ? ['loyalty_join'] : [],
+          // "Came from" on the docket: a cart a guest's own assistant handed to this page, or the page itself.
+          source: handed.current?.ok ? 'assistant' : 'website',
         },
       });
       if (!r.ok) {

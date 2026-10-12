@@ -34,7 +34,8 @@ refused; plugin off, venue not live or org not live → not found `Venue not fou
 - `assistantVenueInfo(ctx, { venueId })` → address, phone, website, cuisine, price band, seven
   days of hours (venue-local `HH:MM-HH:MM`), `openNow`, bookings offered (+ instant/request,
   max party, phone rule, note), pickup offered (+ asap), the venue's `assistant_note`.
-- `assistantMenu(ctx, { venueId, at? })` → `getPublicMenu(surface 'online')` cut to
+- `assistantMenu(ctx, { venueId, at? })` → `getPublicMenu(surface 'assistants')` (an item the venue
+  hid from "Inside assistants" is left out; the `assistants` channel's price applies) cut to
   `visible_menus`, plus `orderable`.
 - `assistantBookingTimes(ctx, { venueId, date, partySize })` → `getBookingAvailability`.
 - `assistantPickupTimes(ctx, { venueId, date? })` → `getPickupSlots`.

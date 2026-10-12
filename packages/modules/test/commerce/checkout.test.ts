@@ -87,7 +87,8 @@ describe('checkout and payment', () => {
     expect(mail[0]!.subject).toBe(`Order ${order.reference} at Oak Diner is confirmed`);
     expect(mail[0]!.body).toContain('1 x Wagyu rump 250g (Medium rare, Truffle fries)  $51.00');
     expect(mail[0]!.body).toContain('Total paid: $73.00');
-    expect(mail[0]!.body).toContain(`http://${diner().host}/order/${order.trackingToken}`);
+    // The site serves tracking at /order/t/<token> (components/site/order-pages.tsx).
+    expect(mail[0]!.body).toContain(`http://${diner().host}/order/t/${order.trackingToken}`);
 
     // The funnel: placed then paid, both carrying the visitor's session.
     const evs = await t.db.selectFrom('events').select(['name', 'session_id']).where('name', 'in', ['order.placed', 'order.paid']).where(sql<boolean>`properties->>'order_id' = ${order.id}`).execute();

@@ -1,11 +1,12 @@
 'use client';
 
-import { useActionState } from 'react';
+import { useActionState, useState } from 'react';
 import { SubmitButton, type FormState } from '@/ui';
 
 /**
- * The 86 control for one item: take it off everywhere at once, either until the end of the
- * current service or until someone puts it back; or put it back. One tap on a busy line.
+ * The 86 control for one item: take it off everywhere at once until the end of this service,
+ * until tomorrow, until a time you pick, or until someone puts it back; or put it back. One tap
+ * on a busy line. The item comes back on its own when the time passes.
  */
 export function EightySix({
   action,
@@ -19,6 +20,7 @@ export function EightySix({
   available: boolean;
 }) {
   const [state, formAction] = useActionState(action, null);
+  const [until, setUntil] = useState('end_of_service');
   return (
     <form action={formAction} className="flex flex-wrap items-center justify-end gap-2" data-testid={`eighty-six-${itemId}`}>
       <input type="hidden" name="itemId" value={itemId} />
@@ -28,10 +30,20 @@ export function EightySix({
           <label className="sr-only" htmlFor={`until-${itemId}`}>
             How long {name} is off
           </label>
-          <select id={`until-${itemId}`} name="until" defaultValue="end_of_service" className="h-8 rounded-md border border-line-strong bg-surface px-2 text-xs text-ink">
+          <select id={`until-${itemId}`} name="until" value={until} onChange={(e) => setUntil(e.currentTarget.value)} className="h-8 rounded-md border border-line-strong bg-surface px-2 text-xs text-ink">
             <option value="end_of_service">Until end of service</option>
+            <option value="tomorrow">Until tomorrow</option>
+            <option value="at">Until a time…</option>
             <option value="">Until put back</option>
           </select>
+          {until === 'at' ? (
+            <>
+              <label className="sr-only" htmlFor={`until-at-${itemId}`}>
+                When {name} is back
+              </label>
+              <input id={`until-at-${itemId}`} name="untilAt" type="datetime-local" required className="h-8 rounded-md border border-line-strong bg-surface px-2 text-xs text-ink" />
+            </>
+          ) : null}
           <SubmitButton size="sm" variant="secondary" pendingLabel="…">
             86 it
           </SubmitButton>

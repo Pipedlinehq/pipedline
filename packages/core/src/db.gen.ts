@@ -65,6 +65,8 @@ export type JsonValue = JsonArray | JsonObject | JsonPrimitive;
 
 export type LoyaltyTxnKind = "adjust" | "bonus" | "burn" | "earn" | "expire" | "reverse" | "transfer";
 
+export type MenuChannel = "assistants" | "delivery" | "pickup" | "qr" | "website";
+
 export type MsgChannel = "email" | "sms";
 
 export type MsgKind = "marketing" | "transactional";
@@ -73,15 +75,23 @@ export type MsgStatus = "bounced" | "cancelled" | "delivered" | "failed" | "queu
 
 export type Numeric = ColumnType<number, number | string, number | string>;
 
+export type OfferAppliesTo = "bill" | "category" | "delivery" | "item";
+
+export type OfferAudience = "everyone" | "list" | "loyalty_members" | "new_guests";
+
 export type OfferCodeStatus = "claimed" | "expired" | "issued" | "redeemed" | "voided";
 
 export type OfferKind = "birthday" | "comeback" | "creator" | "manual" | "voucher" | "welcome";
+
+export type OfferMethod = "automatic" | "code";
 
 export type OnboardingOrigin = "platform" | "self_serve";
 
 export type OrderChannel = "delivery" | "dine-in-qr" | "pickup";
 
 export type OrderPaymentStatus = "failed" | "paid" | "partially_refunded" | "refunded" | "unpaid";
+
+export type OrderSource = "assistant" | "phone" | "qr" | "square" | "website";
 
 export type OrderStatus = "accepted" | "cancelled" | "completed" | "draft" | "pending_payment" | "placed" | "preparing" | "ready" | "refunded" | "rejected";
 
@@ -114,6 +124,8 @@ export type StaffRole = "front_of_house" | "host" | "kitchen" | "manager" | "own
 export type StaffStatus = "active" | "disabled" | "invited";
 
 export type SuppressionReason = "bounced_hard" | "complained" | "manual" | "unsubscribed";
+
+export type SurchargeKind = "days" | "public_holiday" | "sunday";
 
 export type TicketStatus = "acknowledged" | "bumped" | "cancelled" | "new" | "ready";
 
@@ -249,6 +261,26 @@ export interface AgentRuns {
   venue_id: string | null;
 }
 
+export interface AlertCursors {
+  org_id: string;
+  read_through: Timestamp;
+  updated_at: Generated<Timestamp>;
+}
+
+export interface AlertRules {
+  channel: MsgChannel;
+  created_at: Generated<Timestamp>;
+  created_by_id: string | null;
+  enabled: Generated<boolean>;
+  event: string;
+  id: Generated<string>;
+  org_id: string;
+  recipient: string;
+  recipient_kind: string;
+  updated_at: Generated<Timestamp>;
+  venue_id: string;
+}
+
 export interface Approvals {
   created_at: Generated<Timestamp>;
   decided_at: Timestamp | null;
@@ -298,6 +330,7 @@ export interface BenchmarkBands {
 }
 
 export interface Bookings {
+  abandoned_at: Timestamp | null;
   booked_for: Timestamp;
   cancelled_at: Timestamp | null;
   cancelled_by: string | null;
@@ -313,9 +346,14 @@ export interface Bookings {
   guest_note: string | null;
   guest_phone: string | null;
   id: Generated<string>;
+  nudge_message_id: string | null;
+  nudge_sent_at: Timestamp | null;
+  nudge_status: string | null;
   org_id: string;
   over_capacity: Generated<boolean>;
   party_size: number;
+  purged_at: Timestamp | null;
+  recovered_at: Timestamp | null;
   reference: string;
   reminded_at: Timestamp | null;
   request_key: string | null;
@@ -486,9 +524,11 @@ export interface Customers {
   merged_into_id: string | null;
   notes: string | null;
   org_id: string;
+  postcode: string | null;
   primary_email: string | null;
   primary_phone: string | null;
   status: Generated<CustomerStatus>;
+  suburb: string | null;
   updated_at: Generated<Timestamp>;
 }
 
@@ -783,6 +823,24 @@ export interface Flows {
   updated_at: Generated<Timestamp>;
 }
 
+export interface HomeDismissals {
+  card_key: string;
+  dismissed_at: Generated<Timestamp>;
+  org_id: string;
+  staff_id: string;
+}
+
+export interface HomeSuggestionDecisions {
+  decided_at: Generated<Timestamp>;
+  decided_by_id: string | null;
+  decision: string;
+  id: Generated<string>;
+  org_id: string;
+  reason: string | null;
+  suggestion_key: string;
+  venue_id: string;
+}
+
 export interface HourExceptions {
   closed: Generated<boolean>;
   closes_at: string | null;
@@ -969,6 +1027,17 @@ export interface MenuImports {
   venue_id: string;
 }
 
+export interface MenuItemPrices {
+  channel: MenuChannel;
+  created_at: Generated<Timestamp>;
+  id: Generated<string>;
+  item_id: string;
+  org_id: string;
+  price_cents: number;
+  updated_at: Generated<Timestamp>;
+  venue_id: string;
+}
+
 export interface MenuItems {
   allergens: Generated<string[]>;
   calories: number | null;
@@ -989,6 +1058,7 @@ export interface MenuItems {
   prep_minutes: Generated<number>;
   price_cents: number;
   section_id: string;
+  shown_on: Generated<string[]>;
   sort_order: Generated<number>;
   spice_level: number | null;
   unavailable_until: Timestamp | null;
@@ -1004,6 +1074,8 @@ export interface Menus {
   deleted_at: Timestamp | null;
   id: Generated<string>;
   is_active: Generated<boolean>;
+  live_from: Timestamp | null;
+  live_until: Timestamp | null;
   name: string;
   org_id: string;
   sort_order: Generated<number>;
@@ -1016,10 +1088,20 @@ export interface MenuSections {
   description: string | null;
   id: Generated<string>;
   is_visible: Generated<boolean>;
+  live_from: Timestamp | null;
+  live_until: Timestamp | null;
   menu_id: string;
   name: string;
   org_id: string;
+  shown_on: string[] | null;
   sort_order: Generated<number>;
+  venue_id: string;
+}
+
+export interface MenuSettings {
+  new_items_shown_on: Generated<string[]>;
+  org_id: string;
+  updated_at: Generated<Timestamp>;
   venue_id: string;
 }
 
@@ -1107,28 +1189,58 @@ export interface OfferCodes {
 }
 
 export interface Offers {
+  applies_to: Generated<OfferAppliesTo>;
+  audience: Generated<OfferAudience>;
   campaign_id: string | null;
+  category: string | null;
   channels: Generated<ArrayType<OrderChannel>>;
   code_prefix: Generated<string>;
+  combine_bill: Generated<boolean>;
+  combine_delivery: Generated<boolean>;
+  combine_item: Generated<boolean>;
   created_at: Generated<Timestamp>;
   creator_id: string | null;
+  days: number[] | null;
   description: string | null;
   discount_kind: DiscountKind;
+  ends_at: Timestamp | null;
   id: Generated<string>;
   is_active: Generated<boolean>;
   kind: OfferKind;
   max_codes: number | null;
   menu_item_id: string | null;
+  method: Generated<OfferMethod>;
   min_spend_cents: Generated<number>;
   name: string;
   org_id: string;
+  per_guest_limit: number | null;
   percent_off: number | null;
   price_cents: Generated<number>;
   requires_claim: Generated<boolean>;
+  segment_id: string | null;
+  services: string[] | null;
+  starts_at: Timestamp | null;
+  time_from: string | null;
+  time_to: string | null;
+  total_limit: number | null;
   updated_at: Generated<Timestamp>;
   valid_venue_ids: string[] | null;
   validity_days: Generated<number>;
   value_cents: number | null;
+}
+
+export interface OfferUses {
+  created_at: Generated<Timestamp>;
+  customer_id: string | null;
+  discount_cents: number;
+  id: Generated<string>;
+  offer_id: string;
+  order_id: string | null;
+  org_id: string;
+  released_at: Timestamp | null;
+  transaction_id: string | null;
+  used_at: Timestamp;
+  venue_id: string;
 }
 
 export interface Onboardings {
@@ -1177,6 +1289,7 @@ export interface OrderItems {
 }
 
 export interface Orders {
+  abandoned_at: Timestamp | null;
   absorbed_codes: Generated<string[]>;
   absorbed_discount_cents: Generated<number>;
   accepted_at: Timestamp | null;
@@ -1196,12 +1309,19 @@ export interface Orders {
   delivery_fee_cents: Generated<number>;
   discount_cents: Generated<number>;
   flags: Generated<string[]>;
+  hold_until: Timestamp | null;
   id: Generated<string>;
   idempotency_key: string;
   item_count: Generated<number>;
+  lapsed_at: Timestamp | null;
   loyalty_redemption_id: string | null;
+  nudge_message_id: string | null;
+  nudge_sent_at: Timestamp | null;
+  nudge_status: string | null;
   offer_code_id: string | null;
   org_id: string;
+  paid_by: string | null;
+  pay_link_sent_at: Timestamp | null;
   payment_status: Generated<OrderPaymentStatus>;
   pickup_slot_end: Timestamp | null;
   pickup_slot_start: Timestamp | null;
@@ -1209,12 +1329,16 @@ export interface Orders {
   pos_order_ref: string | null;
   promised_at: Timestamp | null;
   promo_code: string | null;
+  purged_at: Timestamp | null;
   qr_code_id: string | null;
   ready_at: Timestamp | null;
+  recovered_at: Timestamp | null;
+  recovered_order_id: string | null;
   reference: string;
   rejected_reason: string | null;
   requested_asap: Generated<boolean>;
   session_id: string | null;
+  source: Generated<OrderSource>;
   status: Generated<OrderStatus>;
   subtotal_cents: Generated<number>;
   table_label: string | null;
@@ -1415,6 +1539,41 @@ export interface Refunds {
   staff_id: string | null;
   status: Generated<PaymentStatus>;
   updated_at: Generated<Timestamp>;
+}
+
+export interface ReportAnnotations {
+  created_at: Generated<Timestamp>;
+  created_by_id: string | null;
+  id: Generated<string>;
+  label: string;
+  on_date: string;
+  org_id: string;
+  venue_id: string | null;
+}
+
+export interface ReportDefinitions {
+  category: string;
+  chart: Generated<string>;
+  created_at: Generated<Timestamp>;
+  created_by_id: string | null;
+  description: string | null;
+  id: Generated<string>;
+  name: string;
+  org_id: string;
+  query: Json;
+  updated_at: Generated<Timestamp>;
+}
+
+export interface ReportTargets {
+  created_at: Generated<Timestamp>;
+  created_by_id: string | null;
+  id: Generated<string>;
+  metric: string;
+  month: string;
+  org_id: string;
+  target: Numeric;
+  updated_at: Generated<Timestamp>;
+  venue_id: string | null;
 }
 
 export interface ReviewListingInsights {
@@ -1664,6 +1823,20 @@ export interface Suppressions {
   value: string;
 }
 
+export interface Surcharges {
+  created_at: Generated<Timestamp>;
+  dates: Generated<string[]>;
+  days: number[] | null;
+  id: Generated<string>;
+  is_active: Generated<boolean>;
+  kind: SurchargeKind;
+  name: string;
+  org_id: string;
+  percent_bp: number;
+  updated_at: Generated<Timestamp>;
+  venue_id: string | null;
+}
+
 export interface TableSessions {
   closed_at: Timestamp | null;
   covers: number | null;
@@ -1856,6 +2029,8 @@ export interface DB {
   agent_oauth_codes: AgentOauthCodes;
   agent_oauth_tokens: AgentOauthTokens;
   agent_runs: AgentRuns;
+  alert_cursors: AlertCursors;
+  alert_rules: AlertRules;
   approvals: Approvals;
   audit_log: AuditLog;
   benchmark_bands: BenchmarkBands;
@@ -1889,6 +2064,8 @@ export interface DB {
   feature_flags: FeatureFlags;
   flow_enrollments: FlowEnrollments;
   flows: Flows;
+  home_dismissals: HomeDismissals;
+  home_suggestion_decisions: HomeSuggestionDecisions;
   hour_exceptions: HourExceptions;
   ingest_cursors: IngestCursors;
   insight_digests: InsightDigests;
@@ -1902,14 +2079,17 @@ export interface DB {
   loyalty_transactions: LoyaltyTransactions;
   media: Media;
   menu_imports: MenuImports;
+  menu_item_prices: MenuItemPrices;
   menu_items: MenuItems;
   menu_sections: MenuSections;
+  menu_settings: MenuSettings;
   menus: Menus;
   message_events: MessageEvents;
   messages: Messages;
   modifier_groups: ModifierGroups;
   modifiers: Modifiers;
   offer_codes: OfferCodes;
+  offer_uses: OfferUses;
   offers: Offers;
   onboarding_touches: OnboardingTouches;
   onboardings: Onboardings;
@@ -1928,6 +2108,9 @@ export interface DB {
   redemptions: Redemptions;
   redirects: Redirects;
   refunds: Refunds;
+  report_annotations: ReportAnnotations;
+  report_definitions: ReportDefinitions;
+  report_targets: ReportTargets;
   review_listing_insights: ReviewListingInsights;
   review_reply_drafts: ReviewReplyDrafts;
   review_sync_state: ReviewSyncState;
@@ -1946,6 +2129,7 @@ export interface DB {
   staff_venues: StaffVenues;
   support_access: SupportAccess;
   suppressions: Suppressions;
+  surcharges: Surcharges;
   table_sessions: TableSessions;
   templates: Templates;
   ticket_events: TicketEvents;

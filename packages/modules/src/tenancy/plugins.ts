@@ -138,7 +138,7 @@ export const DOCS_BASE = 'https://github.com/Pipedlinehq/pipedline/blob/main/doc
  * can be served from a deployment that does not ship the docs; `pnpm check:manifests` fails when
  * this list and the directory disagree.
  */
-export const DOCUMENTED_MODULES: readonly string[] = ['bookings', 'comms', 'delivery', 'guest-plugin', 'hub', 'loyalty', 'ordering', 'qr', 'specials', 'website'];
+export const DOCUMENTED_MODULES: readonly string[] = ['bookings', 'comms', 'delivery', 'guest-plugin', 'hub', 'loyalty', 'offers', 'ordering', 'qr', 'specials', 'website'];
 
 /** The spec's URL on GitHub, or null when the module has none. */
 export const docsOf = (key: string): string | null => (DOCUMENTED_MODULES.includes(key) ? `${DOCS_BASE}${key}.md` : null);

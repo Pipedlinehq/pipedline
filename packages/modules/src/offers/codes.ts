@@ -3,7 +3,7 @@ import { type Ctx, type IdentityHint, GUEST_FACING_ROLES, audit, conflict, inval
 import { resolveCustomer } from '../identity/resolve';
 import { queueMessage } from '../comms/outbox';
 import { getOrg } from '../tenancy/orgs';
-import { type OfferRow, assertOffersOn, loadOffer, offerSummary } from './definitions';
+import { type OfferRow, assertOffersOn, loadOffer, offerStatus, offerSummary } from './definitions';
 import { offerClaimed, offerExpired, offerIssued, offerVoided } from './module';
 import { OFFER_CODE_TEMPLATE } from './templates';
 
@@ -95,6 +95,14 @@ export function codeView(row: CodeRow, offer: OfferRow, now: Date, currency?: st
 const ONCE_PER_GUEST = new Set<OfferRow['kind']>(['welcome', 'creator']);
 /** Offers the public may ask for on a sign-up page. */
 const PUBLIC_SIGNUP = new Set<OfferRow['kind']>(['welcome', 'creator']);
+
+/** Codes exist for code offers that are on and have not ended. A scheduled offer may issue early: the code waits for the start. */
+function assertIssuable(ctx: Ctx, offer: OfferRow): void {
+  if (offer.method === 'automatic') throw invalid('That offer is applied by itself at checkout and the till; it has no codes.');
+  const status = offerStatus(offer, ctx.now());
+  if (status === 'off') throw invalid('That offer is switched off.');
+  if (status === 'expired') throw invalid('That offer has ended.');
+}
 
 const codeEventProps = (offer: OfferRow, row: Pick<CodeRow, 'id'>) => ({ offer_id: offer.id, offer_kind: offer.kind, code_id: row.id });
 export const codeAttribution = (offer: OfferRow, code: string) => ({ creatorId: offer.creator_id, campaignId: offer.campaign_id, code });
@@ -253,7 +261,7 @@ export async function issueCode(ctx: Ctx, raw: z.input<typeof issueCodeInput>): 
   await assertOffersOn(ctx);
   const offer = await loadOffer(ctx, input.offerId);
   if (!offer) throw notFound('Offer not found');
-  if (!offer.is_active) throw invalid('That offer is switched off.');
+  assertIssuable(ctx, offer);
 
   const r = await issue(ctx, offer, { customerId: input.customerId ?? null, source: input.source, claimed: !offer.requires_claim });
   if (!r.row) {
@@ -293,7 +301,7 @@ export async function issueCodes(ctx: Ctx, raw: z.input<typeof issueCodesInput>)
   const config = await assertOffersOn(ctx);
   const offer = await loadOffer(ctx, input.offerId);
   if (!offer) throw notFound('Offer not found');
-  if (!offer.is_active) throw invalid('That offer is switched off.');
+  assertIssuable(ctx, offer);
   const ids = [...new Set(input.customerIds)];
   if (ids.length > config.bulkIssueMax) throw invalid(`That is more than ${config.bulkIssueMax} guests at once. Split the list.`);
 
@@ -341,7 +349,7 @@ export async function requestOfferCode(ctx: Ctx, raw: z.input<typeof requestCode
   await assertOffersOn(ctx, input.venueId);
   if (ctx.ip) await rateLimit(ctx.app, `offer-signup:${ctx.orgId}:${ctx.ip}`, { limit: 10, windowSeconds: 600 });
   const offer = await loadOffer(ctx, input.offerId);
-  if (!offer || !offer.is_active || !PUBLIC_SIGNUP.has(offer.kind)) throw notFound('Offer not found');
+  if (!offer || offerStatus(offer, ctx.now()) !== 'active' || offer.method !== 'code' || !PUBLIC_SIGNUP.has(offer.kind)) throw notFound('Offer not found');
 
   const hints: IdentityHint[] = [];
   if (input.email) hints.push({ kind: 'email', value: input.email });

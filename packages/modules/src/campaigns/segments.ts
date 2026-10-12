@@ -1,18 +1,23 @@
 import { z } from 'zod';
 import type { RawBuilder } from 'kysely';
 import { type Ctx, audit, conflict, invalid, isUniqueViolation, json, localDate, notFound, requireStaff, sql } from '@ros/core';
+import { type ListNode, compileListQuery, listText, listWords, parseListQuery } from '../identity/lists';
 import { getOrg } from '../tenancy/orgs';
 import { assertCampaignsOnSomewhere, primaryVenueId } from './settings';
 
 /**
- * Segments: a declarative rule tree over what the spine knows about a guest, never SQL from a
- * client. The tree is validated with zod (strict objects, a fixed set of fields, bounded depth
- * and size) and compiled here to parameterised SQL: field names come from this file's own
- * table, and every value a person typed is a bound parameter.
+ * Segments, which the console calls guest lists: a rule over what the spine knows about a guest,
+ * never SQL from a client. A rule is one of two things:
  *
- * Fields read the customer record, the analytics customer snapshot (fact_customer: order
- * count, spend, first and last order, RFM scores and segment, favourite channel and venue), the
- * guest's consents, and the event stream (loyalty membership).
+ *   - `{ query: "last visit more than 60 days ago and said yes to email" }`: the plain query
+ *     language (docs/CONSOLE_IA.md section 9, pattern 5), parsed and compiled by the identity
+ *     spine (identity/list-grammar.ts, identity/lists.ts). This is what the console builds and
+ *     what the default lists use. It reads live facts: sales, consents, the event stream.
+ *   - the older declarative tree (`all` / `any` / `not` over fixed leaves), still valid, compiled
+ *     here. Its leaves read the customer record, the analytics customer snapshot (fact_customer:
+ *     RFM scores, favourite channel and venue), consents and the event stream.
+ *
+ * Either way the shape is validated with zod and every value a person typed is a bound parameter.
  */
 
 export const RFM_SEGMENTS = ['new', 'one_timer', 'repeater', 'frequent', 'loyal', 'at_risk', 'lapsed'] as const;
@@ -43,10 +48,15 @@ const leaf = z.union([
   z.strictObject({ field: z.literal('birthday_month'), in: z.array(z.number().int().min(1).max(12)).min(1).max(12) }),
 ]);
 export type SegmentLeaf = z.infer<typeof leaf>;
-export type SegmentRule = SegmentLeaf | { all: SegmentRule[] } | { any: SegmentRule[] } | { not: SegmentRule };
+/** A guest list written in the plain query language. */
+export type SegmentQuery = { query: string };
+export type SegmentRule = SegmentQuery | SegmentLeaf | { all: SegmentRule[] } | { any: SegmentRule[] } | { not: SegmentRule };
+
+const queryRule = z.strictObject({ query: z.string().trim().min(1).max(600) });
 
 export const segmentRule: z.ZodType<SegmentRule> = z.lazy(() =>
   z.union([
+    queryRule,
     z.strictObject({ all: z.array(segmentRule).min(1).max(20) }),
     z.strictObject({ any: z.array(segmentRule).min(1).max(20) }),
     z.strictObject({ not: segmentRule }),
@@ -57,13 +67,21 @@ export const segmentRule: z.ZodType<SegmentRule> = z.lazy(() =>
 const MAX_DEPTH = 5;
 const MAX_LEAVES = 40;
 
-/** Validate a rule tree: its shape, and that it is not too deep or too large to run. */
+export const isQueryRule = (r: SegmentRule): r is SegmentQuery => 'query' in r;
+
+/**
+ * Validate a rule: its shape, and that it is not too deep or too large to run. A query rule is
+ * parsed by the grammar (which refuses more than ten conditions) and stored in its canonical
+ * wording, so the same list always reads the same way.
+ */
 export function parseSegmentRule(raw: unknown): SegmentRule {
   const parsed = segmentRule.safeParse(raw);
   if (!parsed.success) throw invalid(parsed.error.issues[0]?.message ?? 'That segment rule is not valid.', { issues: parsed.error.issues });
+  if (isQueryRule(parsed.data)) return { query: listText(parseListQuery(parsed.data.query)) };
   let leaves = 0;
   const walk = (r: SegmentRule, depth: number): void => {
     if (depth > MAX_DEPTH) throw invalid(`A segment rule can nest at most ${MAX_DEPTH} deep.`);
+    if (isQueryRule(r)) throw invalid('A plain-words rule stands on its own; it cannot sit inside a condition tree.');
     if ('all' in r) r.all.forEach((x) => walk(x, depth + 1));
     else if ('any' in r) r.any.forEach((x) => walk(x, depth + 1));
     else if ('not' in r) walk(r.not, depth + 1);
@@ -73,7 +91,12 @@ export function parseSegmentRule(raw: unknown): SegmentRule {
   return parsed.data;
 }
 
+/** The parsed tree of a query rule (already validated), for compiling and for words. */
+export const queryTree = (r: SegmentQuery): ListNode => parseListQuery(r.query);
+
 export interface CompileFrame {
+  /** The instant the rule is evaluated at (ctx.now()). */
+  now: Date;
   /** Venue-local "today" (the org's zone), for day counts. */
   today: string;
   /** The org's first venue: the home of a guest whose history names none. */
@@ -148,6 +171,7 @@ function compileLeaf(r: SegmentLeaf, frame: CompileFrame): RawBuilder<boolean> {
  * who has never ordered.
  */
 export function compileSegmentRule(rule: SegmentRule, frame: CompileFrame): RawBuilder<boolean> {
+  if (isQueryRule(rule)) return compileListQuery(queryTree(rule), { now: frame.now });
   if ('all' in rule) return sql<boolean>`(${sql.join(rule.all.map((r) => compileSegmentRule(r, frame)), sql` and `)})`;
   if ('any' in rule) return sql<boolean>`(${sql.join(rule.any.map((r) => compileSegmentRule(r, frame)), sql` or `)})`;
   if ('not' in rule) return sql<boolean>`(not coalesce(${compileSegmentRule(rule.not, frame)}, false))`;
@@ -165,7 +189,7 @@ export function reachableSql(channel: 'email' | 'sms'): RawBuilder<boolean> {
 
 export async function compileFrame(ctx: Ctx): Promise<CompileFrame> {
   const org = await getOrg(ctx);
-  return { today: localDate(ctx.now(), org.timezone), primaryVenueId: await primaryVenueId(ctx) };
+  return { now: ctx.now(), today: localDate(ctx.now(), org.timezone), primaryVenueId: await primaryVenueId(ctx) };
 }
 
 export interface AudienceSpec {
@@ -210,34 +234,44 @@ export interface SegmentView {
   name: string;
   description: string | null;
   definition: SegmentRule;
+  /** The rule in the plain query language, when it was written that way; null for an older condition tree. */
+  query: string | null;
+  /** The rule as a sentence: "Guests whose last visit was more than 60 days ago and who said yes to email". */
+  words: string | null;
   isSystem: boolean;
   updatedAt: Date;
 }
 
 const SEG_COLS = ['id', 'name', 'description', 'definition', 'is_system', 'updated_at'] as const;
-const segView = (r: { id: string; name: string; description: string | null; definition: unknown; is_system: boolean; updated_at: Date }): SegmentView => ({
-  id: r.id,
-  name: r.name,
-  description: r.description,
-  definition: r.definition as SegmentRule,
-  isSystem: r.is_system,
-  updatedAt: r.updated_at,
-});
+const segView = (r: { id: string; name: string; description: string | null; definition: unknown; is_system: boolean; updated_at: Date }): SegmentView => {
+  const definition = r.definition as SegmentRule;
+  const query = isQueryRule(definition) ? definition.query : null;
+  return {
+    id: r.id,
+    name: r.name,
+    description: r.description,
+    definition,
+    query,
+    words: query ? listWords(parseListQuery(query)) : null,
+    isSystem: r.is_system,
+    updatedAt: r.updated_at,
+  };
+};
 
 /**
- * The segments every org starts with. Thresholds follow the analytics settings' segments where
- * the snapshot already names the group; "lapsed 60+" and "regulars" are rules of their own.
+ * The guest lists every org starts with (docs/CONSOLE.md "Customers"). Written in the plain
+ * query language, so an owner can read them and copy one to make their own. They are code: the
+ * rows exist per org (`ensureSystemSegments`) and cannot be changed or deleted.
  */
 export const SYSTEM_SEGMENTS: Array<{ name: string; description: string; definition: SegmentRule }> = [
-  { name: 'New', description: 'One order so far, recently.', definition: { field: 'rfm_segment', in: ['new'] } },
-  { name: 'One-timers', description: 'One order, a while ago, and never back.', definition: { field: 'rfm_segment', in: ['one_timer'] } },
-  { name: 'Lapsed 60+', description: 'Not seen for 60 days or more.', definition: { field: 'recency_days', min: 60 } },
-  { name: 'At risk', description: 'Came back before, but has gone quiet.', definition: { field: 'rfm_segment', in: ['at_risk'] } },
-  { name: 'Regulars', description: 'Three or more orders, seen in the last 60 days.', definition: { all: [{ field: 'orders', min: 3 }, { field: 'recency_days', max: 60 }] } },
-  { name: 'VIP', description: 'Five or more orders, or the top fifth by spend with at least two.', definition: { any: [{ field: 'orders', min: 5 }, { all: [{ field: 'm_score', in: [5] }, { field: 'orders', min: 2 }] }] } },
+  { name: 'Regulars', description: 'Three or more visits, and in within the last 90 days.', definition: { query: 'visits more than 2 and last visit within the last 90 days' } },
+  { name: 'New this month', description: 'First visit, or first known to you, in the last 30 days.', definition: { query: 'first visit within the last 30 days' } },
+  { name: 'Said yes to email', description: 'Holds marketing-email consent right now.', definition: { query: 'said yes to email is yes' } },
+  { name: 'Lapsed 60+ days', description: 'Has been in before, but not for 60 days or more.', definition: { query: 'last visit more than 60 days ago' } },
+  { name: 'Big spenders', description: 'More than $500 spent with you, after refunds.', definition: { query: 'spend more than $500' } },
 ];
 
-/** Create the system segments an org is missing. Idempotent; internal callers and the console's first load. */
+/** Create the default lists an org is missing. Idempotent; internal callers and the console's list. */
 export async function ensureSystemSegments(ctx: Ctx): Promise<void> {
   for (const s of SYSTEM_SEGMENTS) {
     await ctx.db
@@ -251,8 +285,51 @@ export async function ensureSystemSegments(ctx: Ctx): Promise<void> {
 export async function listSegments(ctx: Ctx): Promise<SegmentView[]> {
   requireStaff(ctx, { minRole: 'read_only' });
   await assertCampaignsOnSomewhere(ctx);
+  // A self-serve org has never run a seeder: give it the default lists on first look.
+  const have = await ctx.db.selectFrom('segments').select((eb) => eb.fn.countAll<number>().as('n')).where('is_system', '=', true).executeTakeFirstOrThrow();
+  if (Number(have.n) < SYSTEM_SEGMENTS.length) await ensureSystemSegments(ctx);
   const rows = await ctx.db.selectFrom('segments').select(SEG_COLS).orderBy('is_system', 'desc').orderBy('name').execute();
   return rows.map(segView);
+}
+
+/** Names for a set of segment ids, for another module's plain-words summary (offers). No role check. */
+export async function segmentNames(ctx: Ctx, ids: string[]): Promise<Map<string, string>> {
+  const wanted = [...new Set(ids)].filter((id) => z.string().uuid().safeParse(id).success);
+  if (!wanted.length) return new Map();
+  const rows = await ctx.db.selectFrom('segments').select(['id', 'name']).where('id', 'in', wanted).execute();
+  return new Map(rows.map((r) => [r.id, r.name]));
+}
+
+/**
+ * Is this guest in the list right now? For offer eligibility ("who: a guest list"). No role
+ * check: the caller is a service that has done its own. An unknown list is simply "no".
+ */
+export async function isSegmentMember(ctx: Ctx, segmentId: string, customerId: string): Promise<boolean> {
+  if (!z.string().uuid().safeParse(segmentId).success) return false;
+  const r = await ctx.db.selectFrom('segments').select(SEG_COLS).where('id', '=', segmentId).executeTakeFirst();
+  if (!r) return false;
+  const frame = await compileFrame(ctx);
+  const hit = await sql<{ hit: boolean }>`
+    select exists (
+      select 1 from customers c
+      left join fact_customer f on f.org_id = c.org_id and f.customer_id = c.id
+      where c.id = ${customerId}::uuid and ${audienceWhere(ctx, { rule: r.definition as SegmentRule, venueId: null }, frame)}
+    ) as hit`.execute(ctx.db);
+  return !!hit.rows[0]?.hit;
+}
+
+export interface SegmentUsage {
+  /** Campaigns that target the list, newest first. */
+  campaigns: Array<{ id: string; name: string; status: string }>;
+}
+
+/** Where a list is used inside campaigns. Offers report their own use (offers.offersUsingList). */
+export async function segmentUsage(ctx: Ctx, segmentId: string): Promise<SegmentUsage> {
+  requireStaff(ctx, { minRole: 'read_only' });
+  await assertCampaignsOnSomewhere(ctx);
+  await loadSegment(ctx, segmentId);
+  const rows = await ctx.db.selectFrom('campaigns').select(['id', 'name', 'status']).where('segment_id', '=', segmentId).orderBy('created_at', 'desc').limit(50).execute();
+  return { campaigns: rows.map((r) => ({ id: r.id, name: r.name, status: r.status })) };
 }
 
 /** Internal: a segment by id, or not-found. */
@@ -270,25 +347,30 @@ export async function getSegment(ctx: Ctx, id: string): Promise<SegmentView> {
   return loadSegment(ctx, id);
 }
 
-export const saveSegmentInput = z.object({
-  id: z.string().uuid().optional(),
-  name: z.string().trim().min(1).max(80),
-  description: z.string().trim().max(300).nullish(),
-  definition: z.unknown(),
-});
+export const saveSegmentInput = z
+  .object({
+    id: z.string().uuid().optional(),
+    name: z.string().trim().min(1).max(80),
+    description: z.string().trim().max(300).nullish(),
+    /** A condition tree, or `{ query }`. */
+    definition: z.unknown().optional(),
+    /** The rule in the plain query language; the same as `definition: { query }`. */
+    query: z.string().trim().min(1).max(600).optional(),
+  })
+  .refine((v) => v.definition !== undefined || v.query !== undefined, { message: 'Write the rule for the list.' });
 
-/** Create or change a segment. A manager. The system segments cannot be changed, only copied. */
+/** Create or change a guest list. A manager. The default lists cannot be changed, only copied. */
 export async function saveSegment(ctx: Ctx, raw: z.input<typeof saveSegmentInput>): Promise<SegmentView> {
   const parsed = saveSegmentInput.safeParse(raw);
   if (!parsed.success) throw invalid(parsed.error.issues[0]?.message ?? 'That segment is not valid.', { issues: parsed.error.issues });
   const input = parsed.data;
   requireStaff(ctx, { minRole: 'manager' });
   await assertCampaignsOnSomewhere(ctx);
-  const definition = parseSegmentRule(input.definition);
+  const definition = parseSegmentRule(input.query !== undefined ? { query: input.query } : input.definition);
   try {
     if (input.id) {
       const before = await loadSegment(ctx, input.id);
-      if (before.isSystem) throw invalid('A built-in segment cannot be changed. Save a copy under a new name.');
+      if (before.isSystem) throw invalid('A built-in list cannot be changed. Save a copy under a new name.');
       const r = await ctx.db
         .updateTable('segments')
         .set({ name: input.name, description: input.description ?? null, definition: json(definition), updated_at: ctx.now() })
@@ -306,7 +388,7 @@ export async function saveSegment(ctx: Ctx, raw: z.input<typeof saveSegmentInput
     await audit(ctx, { action: 'segment.created', entityType: 'segment', entityId: r.id, after: { name: r.name, definition } });
     return segView(r);
   } catch (e) {
-    if (isUniqueViolation(e)) throw conflict('A segment with that name already exists.');
+    if (isUniqueViolation(e)) throw conflict('A list with that name already exists.');
     throw e;
   }
 }
@@ -315,17 +397,24 @@ export async function deleteSegment(ctx: Ctx, id: string): Promise<void> {
   requireStaff(ctx, { minRole: 'manager' });
   await assertCampaignsOnSomewhere(ctx);
   const s = await loadSegment(ctx, id);
-  if (s.isSystem) throw invalid('A built-in segment cannot be deleted.');
+  if (s.isSystem) throw invalid('A built-in list cannot be deleted.');
   const used = await ctx.db.selectFrom('campaigns').select('id').where('segment_id', '=', s.id).limit(1).executeTakeFirst();
-  if (used) throw conflict('A campaign uses this segment, so it is kept for the record.');
-  await ctx.db.deleteFrom('segments').where('id', '=', s.id).execute();
+  if (used) throw conflict('A campaign uses this list, so it is kept for the record.');
+  try {
+    await ctx.db.deleteFrom('segments').where('id', '=', s.id).execute();
+  } catch (e) {
+    // An offer's "who" points at it (offers.segment_id): the database keeps the row.
+    if ((e as { code?: string }).code === '23503') throw conflict('An offer uses this list, so it is kept. Change the offer first.');
+    throw e;
+  }
   await audit(ctx, { action: 'segment.deleted', entityType: 'segment', entityId: s.id, before: { name: s.name, definition: s.definition } });
 }
 
 export const previewSegmentInput = z.object({
-  /** A stored segment, or a rule tree not yet saved. */
+  /** A stored segment, or a rule not yet saved: a tree, or the plain query language. */
   segmentId: z.string().uuid().optional(),
   definition: z.unknown().optional(),
+  query: z.string().trim().min(1).max(600).optional(),
   /** Only guests whose home venue is this one. */
   venueId: z.string().uuid().optional(),
 });
@@ -343,7 +432,8 @@ export async function previewSegment(ctx: Ctx, raw: z.input<typeof previewSegmen
   if (input.venueId && !on.includes(input.venueId)) throw notFound('Venue not found');
   let rule: SegmentRule;
   if (input.segmentId) rule = (await loadSegment(ctx, input.segmentId)).definition;
+  else if (input.query !== undefined) rule = parseSegmentRule({ query: input.query });
   else if (input.definition !== undefined) rule = parseSegmentRule(input.definition);
-  else throw invalid('Choose a segment or give a rule.');
+  else throw invalid('Choose a list or give a rule.');
   return countAudience(ctx, { rule, venueId: input.venueId ?? null });
 }

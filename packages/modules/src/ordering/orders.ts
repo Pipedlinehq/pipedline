@@ -1,7 +1,9 @@
 import { randomBytes } from 'node:crypto';
+import type { ExpressionBuilder } from 'kysely';
 import { z } from 'zod';
 import {
   type Ctx,
+  type DB,
   ROLE_RANK,
   actorOf,
   addMinutes,
@@ -26,8 +28,10 @@ import { grantConsent } from '../identity/consents';
 import { normaliseEmail, normalisePhone } from '../identity/normalise';
 import { type Acquisition, resolveCustomer } from '../identity/resolve';
 import { getVenue } from '../tenancy/venues';
+import { type KitchenAxis, type LeavesAxis, type MoneyAxis, type OrderAxes, type OrderSource, KITCHEN_AXES, LEAVES_AXES, MONEY_AXES, ORDER_SOURCES, axesOf, channelOf, kitchenChannel, kitchenStatuses } from './axes';
 import { type OrderStatus, getDeliveryPricing, getTableOrdering, orderStatusHandlers } from './contract';
 import {
+  orderAbandoned,
   orderAccepted,
   orderCancelled,
   orderCompleted,
@@ -36,6 +40,7 @@ import {
   orderPreparing,
   orderReady,
   orderRecalled,
+  orderRecovered,
   orderRejected,
 } from './module';
 import { notifyGuest } from './notify';
@@ -200,6 +205,24 @@ export interface OrderView {
   completedAt: Date | null;
   /** The guest's handle on the order. Whoever holds it can follow the order and pay for it. */
   trackingToken: string | null;
+  /** Where the order came from: the venue's site, a table code, the phone, a guest's assistant, the till. */
+  source: OrderSource;
+  /** The three status axes, derived (ordering/axes.ts): what the kitchen, the money and the food are doing. */
+  axes: OrderAxes;
+  // Phone and function orders (drafts).
+  holdUntil: Date | null;
+  payLinkSentAt: Date | null;
+  /** How a draft was paid when not by card: cash, bank or other. */
+  paidBy: 'cash' | 'bank' | 'other' | null;
+  // Didn't finish.
+  lapsedAt: Date | null;
+  abandonedAt: Date | null;
+  nudgeSentAt: Date | null;
+  /** 'queued', or 'suppressed:<reason>', once a nudge was sent. */
+  nudgeStatus: string | null;
+  recoveredAt: Date | null;
+  recoveredOrderId: string | null;
+  purgedAt: Date | null;
 }
 
 const itemView = (i: OrderItemRow): OrderItemView => ({
@@ -257,6 +280,18 @@ function orderView(o: OrderRow, items: OrderItemRow[], refundedCents: number, co
     readyAt: o.ready_at,
     completedAt: o.completed_at,
     trackingToken: contacts ? o.tracking_token : null,
+    source: o.source,
+    axes: axesOf(o),
+    holdUntil: o.hold_until,
+    payLinkSentAt: o.pay_link_sent_at,
+    paidBy: (o.paid_by as 'cash' | 'bank' | 'other' | null) ?? null,
+    lapsedAt: o.lapsed_at,
+    abandonedAt: o.abandoned_at,
+    nudgeSentAt: o.nudge_sent_at,
+    nudgeStatus: o.nudge_status,
+    recoveredAt: o.recovered_at,
+    recoveredOrderId: o.recovered_order_id,
+    purgedAt: o.purged_at,
   };
 }
 
@@ -310,20 +345,76 @@ export const listOrdersInput = z.object({
   needsAttention: z.boolean().optional(),
   /** Part of an order reference, as typed into a search box ("A7"). */
   reference: z.string().trim().min(1).max(20).optional(),
+  // The status axes (ordering/axes.ts), each a filter token of its own.
+  /** What the kitchen is doing with it. `none` and `stopped` bring in orders the default list leaves out. */
+  kitchen: z.array(z.enum(KITCHEN_AXES as [KitchenAxis, ...KitchenAxis[]])).max(9).optional(),
+  /** What the money is doing. `unpaid` and `due` bring in unpaid checkouts and drafts. */
+  money: z.array(z.enum(MONEY_AXES as [MoneyAxis, ...MoneyAxis[]])).max(6).optional(),
+  /** How it leaves: pickup, table or delivery. The same as `channel`, in the console's words. */
+  leaves: z.array(z.enum(LEAVES_AXES as [LeavesAxis, ...LeavesAxis[]])).max(3).optional(),
+  /** Where it came from. */
+  source: z.array(z.enum(ORDER_SOURCES as [OrderSource, ...OrderSource[]])).max(5).optional(),
+  /** True = only orders a guest started and did not finish (abandoned, not yet purged), newest first. */
+  unfinished: z.boolean().optional(),
+  /** True = only phone and function orders still waiting to be paid (drafts and their pay links). */
+  drafts: z.boolean().optional(),
   limit: z.number().int().min(1).max(200).default(50),
   /** created_at of the last row of the previous page. */
   before: z.date().optional(),
 });
 
-/** The console's order list, newest first. Unpaid checkouts are left out unless asked for by status. */
+/**
+ * The console's order list, newest first. Unpaid checkouts and drafts are left out unless a
+ * filter asks for them (a status, a kitchen or money axis that means them, `unfinished`, `drafts`).
+ */
 export async function listOrders(ctx: Ctx, raw: z.input<typeof listOrdersInput>): Promise<OrderView[]> {
   const input = listOrdersInput.parse(raw);
   requireStaff(ctx, { venueId: input.venueId, minRole: 'read_only' });
   await assertModule(ctx, input.venueId, orderingModule);
   let q = ctx.db.selectFrom('orders').selectAll().where('venue_id', '=', input.venueId).orderBy('created_at', 'desc').limit(input.limit);
+  const wantsUnpaid = input.money?.some((m) => m === 'unpaid' || m === 'due') || input.kitchen?.includes('none') || input.unfinished || input.drafts;
   if (input.statuses?.length) q = q.where('status', 'in', input.statuses);
   else if (input.live) q = q.where('status', 'in', ['placed', 'accepted', 'preparing', 'ready']);
-  else q = q.where('status', 'not in', ['draft', 'pending_payment']);
+  else if (!wantsUnpaid) q = q.where('status', 'not in', ['draft', 'pending_payment']);
+  if (input.kitchen?.length) {
+    const axes = input.kitchen;
+    q = q.where((eb) =>
+      eb.or(
+        axes.map((k) => {
+          const channel = kitchenChannel(k);
+          const statuses = eb('status', 'in', kitchenStatuses(k));
+          return channel ? eb.and([statuses, eb('channel', '=', channel)]) : statuses;
+        }),
+      ),
+    );
+  }
+  if (input.money?.length) {
+    const axes = input.money;
+    q = q.where((eb) =>
+      eb.or(
+        axes.map((m) => {
+          switch (m) {
+            case 'paid':
+              return eb('payment_status', '=', 'paid');
+            case 'partly_refunded':
+              return eb('payment_status', '=', 'partially_refunded');
+            case 'refunded':
+              return eb('payment_status', '=', 'refunded');
+            case 'voided':
+              return eb.and([eb('payment_status', 'in', ['unpaid', 'failed']), eb('status', 'in', ['cancelled', 'rejected', 'refunded'])]);
+            case 'due':
+              return eb.and([eb('payment_status', 'in', ['unpaid', 'failed']), eb('status', 'not in', ['cancelled', 'rejected', 'refunded']), eb('source', '=', 'phone')]);
+            default:
+              return eb.and([eb('payment_status', 'in', ['unpaid', 'failed']), eb('status', 'not in', ['cancelled', 'rejected', 'refunded']), eb('source', '!=', 'phone')]);
+          }
+        }),
+      ),
+    );
+  }
+  if (input.leaves?.length) q = q.where('channel', 'in', input.leaves.map(channelOf));
+  if (input.source?.length) q = q.where('source', 'in', input.source);
+  if (input.unfinished) q = q.where('abandoned_at', 'is not', null).where('purged_at', 'is', null);
+  if (input.drafts) q = q.where('source', '=', 'phone').where('status', 'in', ['draft', 'pending_payment']);
   if (input.channel) q = q.where('channel', '=', input.channel);
   if (input.from) q = q.where('created_at', '>=', input.from);
   if (input.to) q = q.where('created_at', '<', input.to);
@@ -531,6 +622,12 @@ export const createOrderInput = cartInput.extend({
   consents: z.array(z.object({ purpose: z.enum(PURPOSES), wordingVersion: z.string().max(40).optional() })).max(4).default([]),
   /** Choices another module acts on, e.g. 'loyalty_join'. Stored and passed on, not interpreted. */
   flags: z.array(z.string().regex(/^[a-z][a-z0-9_]{1,39}$/)).max(10).default([]),
+  /**
+   * Where the guest came from: the venue's own order page (the default) or their assistant,
+   * which hands them to that page with a cart. A table order is always `qr`; a staff-built order
+   * `phone` (drafts.ts). The till's orders arrive through the ledger, never here.
+   */
+  source: z.enum(['website', 'assistant']).optional(),
 });
 
 function acquisitionFrom(s: SessionAttribution | null, qrCodeId: string | null): Acquisition | undefined {
@@ -664,6 +761,7 @@ export async function createOrder(ctx: Ctx, raw: z.input<typeof createOrderInput
       channel: input.channel,
       status: 'pending_payment',
       payment_status: 'unpaid',
+      source: input.channel === 'dine-in-qr' ? 'qr' : (input.source ?? 'website'),
       requested_asap: cart.timing.requestedAsap,
       pickup_slot_start: cart.timing.slotStart,
       pickup_slot_end: cart.timing.slotEnd,
@@ -745,7 +843,103 @@ export async function createOrder(ctx: Ctx, raw: z.input<typeof createOrderInput
   );
 
   await enqueue(ctx, expireUnpaidOrderJob, { orderId: order.id }, { key: `expire:${order.id}`, runAt: addMinutes(now, cfg.payment_hold_minutes) });
+  // A pickup or delivery the guest gave a contact for is looked at again at the "didn't finish"
+  // threshold. A table order is not: the guest is at the table, and there is no one to nudge.
+  if (order.channel !== 'dine-in-qr' && (order.customer_email || order.customer_phone)) {
+    await enqueue(ctx, detectAbandonedOrderJob, { orderId: order.id }, { key: `abandon:${order.id}`, runAt: addMinutes(now, cfg.abandoned_after_minutes) });
+  }
   return ownOrderView(ctx, order);
+}
+
+/**
+ * The "didn't finish" check (docs/COMMERCE_ADMIN_PATTERNS.md pattern 7), run once per order at
+ * the venue's threshold. An order still unpaid then, or cancelled because it was never paid, that
+ * has a contact to write to is marked abandoned and listed for staff. Nothing is sent here: the
+ * one nudge is a person's decision (unfinished.ts). Safe to run twice: a second run finds the
+ * mark already made.
+ */
+export const detectAbandonedOrderJob = defineJob({
+  kind: 'ordering.detect_abandoned',
+  schema: z.object({ orderId: z.string().uuid() }),
+  async handler(app, job) {
+    if (!job.orgId) throw new Error('ordering.detect_abandoned needs an org');
+    await app.tenant(job.orgId, WORKER, async (ctx) => {
+      const order = await ctx.db.selectFrom('orders').selectAll().where('id', '=', job.payload.orderId).forUpdate().executeTakeFirst();
+      if (!order || order.abandoned_at || order.purged_at) return;
+      if (order.channel === 'dine-in-qr' || (!order.customer_email && !order.customer_phone)) return;
+      if (order.payment_status !== 'unpaid' && order.payment_status !== 'failed') return;
+      const unfinished = order.status === 'pending_payment' || (order.status === 'cancelled' && order.lapsed_at !== null);
+      if (!unfinished) return;
+      const now = ctx.now();
+      const marked = await ctx.db.updateTable('orders').set({ abandoned_at: now }).where('id', '=', order.id).returningAll().executeTakeFirstOrThrow();
+      await trackInSession(
+        ctx,
+        orderAbandoned,
+        { order_id: order.id, channel: order.channel, total_cents: order.total_cents, minutes_since_started: Math.round((now.getTime() - order.created_at.getTime()) / 60_000) },
+        { venueId: order.venue_id, customerId: order.customer_id, sessionId: order.session_id },
+      );
+      // The guest may already have ordered again and paid before this check ran: recovered on arrival.
+      const later = await laterPaidOrderBy(ctx, marked);
+      if (later) await recordRecovery(ctx, marked, later, 'new_order');
+    });
+  },
+});
+
+const sameGuest = (eb: ExpressionBuilder<DB, 'orders'>, o: Pick<OrderRow, 'customer_id' | 'customer_email' | 'customer_phone'>) =>
+  eb.or([
+    ...(o.customer_id ? [eb('customer_id', '=', o.customer_id)] : []),
+    ...(o.customer_email ? [eb('customer_email', '=', o.customer_email)] : []),
+    ...(o.customer_phone ? [eb('customer_phone', '=', o.customer_phone)] : []),
+  ]);
+
+const hasGuest = (o: Pick<OrderRow, 'customer_id' | 'customer_email' | 'customer_phone'>) => !!(o.customer_id || o.customer_email || o.customer_phone);
+
+/** A paid order by the same guest at the same venue, placed after this one. */
+async function laterPaidOrderBy(ctx: Ctx, o: OrderRow): Promise<OrderRow | null> {
+  if (!hasGuest(o)) return null;
+  const row = await ctx.db
+    .selectFrom('orders')
+    .selectAll()
+    .where('venue_id', '=', o.venue_id)
+    .where('id', '!=', o.id)
+    .where('created_at', '>', o.created_at)
+    .where('payment_status', 'in', ['paid', 'partially_refunded', 'refunded'])
+    .where((eb) => sameGuest(eb, o))
+    .orderBy('created_at')
+    .executeTakeFirst();
+  return row ?? null;
+}
+
+async function recordRecovery(ctx: Ctx, unfinished: OrderRow, by: OrderRow, how: 'same_order' | 'new_order'): Promise<void> {
+  await ctx.db.updateTable('orders').set({ recovered_at: ctx.now(), recovered_order_id: by.id }).where('id', '=', unfinished.id).where('recovered_at', 'is', null).execute();
+  await trackInSession(ctx, orderRecovered, { order_id: unfinished.id, by: how, recovered_order_id: by.id }, { venueId: unfinished.venue_id, customerId: unfinished.customer_id ?? by.customer_id, sessionId: unfinished.session_id });
+}
+
+/**
+ * An order has just been paid: if it was itself unfinished, or the same guest left an earlier
+ * one unfinished at this venue, those are recovered now (docs/COMMERCE_ADMIN_PATTERNS.md 2.2:
+ * "recovered when the order completes by any route"). Called by settlePayment, in its transaction.
+ */
+export async function markRecoveredOrders(ctx: Ctx, paid: OrderRow): Promise<OrderRow> {
+  let out = paid;
+  if (paid.abandoned_at && !paid.recovered_at && !paid.purged_at) {
+    await recordRecovery(ctx, paid, paid, 'same_order');
+    out = await loadOrder(ctx, paid.id);
+  }
+  if (!hasGuest(paid)) return out;
+  const earlier = await ctx.db
+    .selectFrom('orders')
+    .selectAll()
+    .where('venue_id', '=', paid.venue_id)
+    .where('id', '!=', paid.id)
+    .where('abandoned_at', 'is not', null)
+    .where('recovered_at', 'is', null)
+    .where('purged_at', 'is', null)
+    .where('created_at', '<', paid.created_at)
+    .where((eb) => sameGuest(eb, paid))
+    .execute();
+  for (const o of earlier) await recordRecovery(ctx, o, paid, 'new_order');
+  return out;
 }
 
 /**
@@ -767,7 +961,9 @@ export const expireUnpaidOrderJob = defineJob({
         return;
       }
       if (pending) await ctx.db.updateTable('payments').set({ status: 'failed', failure_reason: 'unconfirmed' }).where('id', '=', pending.id).execute();
-      await transition(ctx, order, 'cancelled', { reason: 'Not paid in time.' });
+      // Lapsed, not cancelled by anyone: the "didn't finish" check tells the two apart by this.
+      await ctx.db.updateTable('orders').set({ lapsed_at: ctx.now() }).where('id', '=', order.id).execute();
+      await transition(ctx, { ...order, lapsed_at: ctx.now() }, 'cancelled', { reason: 'Not paid in time.' });
     });
   },
 });

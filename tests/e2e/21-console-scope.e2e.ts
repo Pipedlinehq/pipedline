@@ -7,7 +7,8 @@ afterAll(async () => {
 });
 
 /** Buttons that only read or navigate. Anything else on a read-only person's screen would be a way to change something. */
-const HARMLESS = /^(Apply|Ask|Show table|Show chart|Sign out|Close|✕|Cancel|Search|Look up|Find|Filter|Download as CSV|Previous|Next|Load more|Show|Print.*)$/i;
+// "Put away" dismisses a guidance card for that person only, and "Preview" shows the menu as of a date; neither changes the venue.
+const HARMLESS = /^(Apply|Ask|Show table|Show chart|Sign out|Close|✕|Cancel|Search|Look up|Find|Filter|Download as CSV|Previous|Next|Load more|Show|Print.*|Put away|Preview)$/i;
 
 describe('console scope: people see only their venues, and read-only people change nothing', () => {
   it("the two-venue manager never sees the third venue's orders or numbers", async () => {

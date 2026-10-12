@@ -81,6 +81,8 @@ const BOOKING_VERBS: Record<string, string> = {
   no_show: 'marked the booking a no-show',
   completed: 'finished the booking',
   added: 'took a phone booking',
+  nudge_sent: 'nudged the guest about the unanswered booking request',
+  unfinished_purged: "removed the guest's details from an unanswered booking request (three months old)",
 };
 
 const CONSENT_WORDS: Record<string, string> = { marketing_email: 'marketing email', marketing_sms: 'marketing texts', card_recognition: 'card recognition', ad_platform_sharing: 'sharing with ad platforms' };
@@ -93,10 +95,43 @@ const AUDIT_WORDS: Record<string, Words> = {
   'order.attention_cleared': () => 'marked the order as dealt with',
   'order.switched_to_pickup': () => 'switched the order to pickup',
   'order.discount_absorbed': () => 'absorbed a discount the guest kept',
+  'order.nudge_sent': (e) => (str(rec(e.after).status)?.startsWith('suppressed') ? 'tried to nudge the guest about the unfinished order (the address is blocked)' : 'nudged the guest about the unfinished order'),
+  'order.unfinished_purged': () => "removed the guest's details from an unfinished order (three months old)",
+  'order.draft_created': (e) => `built ${num(rec(e.after).customItems) ? 'an order with a custom item' : 'an order'} by hand${dollars(rec(e.after).totalCents) ? ` for ${dollars(rec(e.after).totalCents)}` : ''}`,
+  'order.pay_link_sent': (e) => `sent the guest a pay link by ${str(rec(e.after).via) === 'sms' ? 'text message' : 'email'}`,
+  'order.marked_paid': (e) => `marked the order paid by ${str(rec(e.after).method) === 'bank' ? 'bank transfer' : (str(rec(e.after).method) ?? 'other means')}${str(rec(e.after).reason) ? `: ${str(rec(e.after).reason)}` : ''}`,
+  'order.draft_cancelled': (e) => `cancelled the phone order${str(rec(e.after).reason) ? `: ${str(rec(e.after).reason)}` : ''}`,
+  'order.draft_expired': () => 'cleared a phone order untouched for a year',
   'menu.item_86': (e) => `86'd ${named(e, 'item')}`,
   'menu.item_restored': (e) => `put ${named(e, 'item')} back on the menu`,
   'menu.modifier_86': (e) => `86'd ${named(e, 'choice')}`,
   'menu.modifier_restored': (e) => `put ${named(e, 'choice')} back`,
+  'menu.item_channel_price': (e) => {
+    const a = rec(e.after);
+    const channel = str(a.channel) ?? 'a channel';
+    const price = dollars(a.priceCents);
+    return price ? `set the ${channel} price of ${named(e, 'item')} to ${price}` : `took the ${channel} price off ${named(e, 'item')}`;
+  },
+  'menu.settings_updated': () => 'changed where new menu items show by default',
+  'menu.menu_updated': (e) => {
+    const a = rec(e.after);
+    const b = rec(e.before);
+    if (a.liveFrom !== b.liveFrom || a.liveUntil !== b.liveUntil) return `changed when ${named(e, 'menu')} goes live or retires`;
+    return `changed ${named(e, 'menu')}`;
+  },
+  'menu.section_updated': (e) => {
+    const a = rec(e.after);
+    const b = rec(e.before);
+    if (a.liveFrom !== b.liveFrom || a.liveUntil !== b.liveUntil) return `changed when ${named(e, 'section')} goes live or retires`;
+    return `changed ${named(e, 'section')}`;
+  },
+  'menu.item_updated': (e) => {
+    const a = rec(e.after);
+    const b = rec(e.before);
+    if (Array.isArray(a.shownOn) && JSON.stringify(a.shownOn) !== JSON.stringify(b.shownOn)) return `changed where ${named(e, 'item')} shows`;
+    if (num(a.priceCents) !== null && a.priceCents !== b.priceCents) return `changed the price of ${named(e, 'item')} to ${dollars(a.priceCents)}`;
+    return `changed ${named(e, 'item')}`;
+  },
   'module.set': (e) => {
     const a = rec(e.after);
     const b = rec(e.before);
@@ -131,6 +166,9 @@ const AUDIT_WORDS: Record<string, Words> = {
   'offer.code_issued': () => 'issued an offer code',
   'offer.code_voided': () => 'cancelled an offer code',
   'offer.code_redeemed_by_staff': () => 'marked an offer code as used at the till',
+  'offer.switched': (e) => `switched ${named(e, 'offer')} ${rec(e.after).isActive === false ? 'off' : 'on'}`,
+  'surcharge.set': (e) => `set the ${named(e, 'surcharge')} surcharge`,
+  'surcharge.deleted': (e) => `removed the ${named(e, 'surcharge')} surcharge`,
   'campaign.drafted': (e) => `drafted ${named(e, 'campaign')}`,
   'campaign.updated': (e) => `changed ${named(e, 'campaign')}`,
   'campaign.submitted': (e) => `sent ${named(e, 'campaign')} for approval`,
@@ -210,6 +248,18 @@ const AUDIT_WORDS: Record<string, Words> = {
   'console.view_updated': (e) => `updated the view “${str(rec(e.after).name) ?? ''}”`,
   'console.view_renamed': (e) => `renamed the view “${str(rec(e.before).name) ?? ''}” to “${str(rec(e.after).name) ?? ''}”`,
   'console.view_deleted': (e) => `deleted the view “${str(rec(e.before).name) ?? ''}”`,
+  'analytics.report_saved': (e) => `saved the report “${str(rec(e.after).name) ?? ''}”`,
+  'analytics.report_updated': (e) => `updated the report “${str(rec(e.after).name) ?? ''}”`,
+  'analytics.report_deleted': (e) => `deleted the report “${str(rec(e.before).name) ?? ''}”`,
+  'analytics.target_set': (e) => `set a ${titleCase(str(rec(e.after).metric) ?? 'monthly')} target for ${str(rec(e.after).month) ?? 'the month'}`,
+  'analytics.target_removed': () => 'removed a monthly target',
+  'analytics.annotation_added': (e) => `marked ${str(rec(e.after).date) ?? 'a date'}: “${str(rec(e.after).label) ?? ''}”`,
+  'analytics.annotation_removed': () => 'took a mark off a date',
+  'alerts.rule_set': (e) => `${rec(e.after).enabled === false ? 'switched off' : 'set'} an alert to the team for “${titleCase(str(rec(e.after).event) ?? 'an event')}”`,
+  'alerts.rule_removed': () => 'removed an alert to the team',
+  'alerts.test_sent': () => 'sent a test alert',
+  'home.suggestion_approved': (e) => `approved the suggestion “${str(rec(e.after).question) ?? str(rec(e.after).key) ?? ''}”`,
+  'home.suggestion_dismissed': (e) => `put away the suggestion “${str(rec(e.after).title) ?? ''}”`,
   'note.removed': () => 'removed a note',
   'support.access_opened': () => 'opened support access to the organisation',
   'support.access_closed': () => 'closed support access',
@@ -262,6 +312,14 @@ const EVENT_WORDS: Record<string, (p: Record<string, unknown>) => string> = {
   'order.pushed_to_pos': (p) => `Sent to the till${str(p.provider) ? ` (${titleCase(str(p.provider)!)})` : ''}`,
   'order.flagged': (p) => `Flagged for a person to look at${str(p.reason) ? `: ${str(p.reason)}` : ''}`,
   'order.switched_to_pickup': () => 'Switched to pickup',
+  'order.abandoned': (p) => `Counted as didn't finish${num(p.minutes_since_started) !== null ? ` after ${num(p.minutes_since_started)} min unpaid` : ''}`,
+  'order.nudged': (p) => (p.status === 'suppressed' ? 'Nudge not sent: the address is blocked' : `Nudge sent by ${p.via === 'sms' ? 'text message' : 'email'}`),
+  'order.recovered': (p) => (p.by === 'new_order' ? 'Recovered: the guest placed a new order' : 'Recovered: the guest paid after all'),
+  'order.purged': () => "Guest's details removed (three months unfinished)",
+  'order.drafted': (p) => `Built by staff${dollars(p.total_cents) ? ` for ${dollars(p.total_cents)}` : ''}${num(p.custom_items) ? ', with a custom item' : ''}`,
+  'order.pay_link_sent': (p) => `Pay link sent by ${p.via === 'sms' ? 'text message' : 'email'}`,
+  'order.marked_paid': (p) => `Marked paid by ${p.method === 'bank' ? 'bank transfer' : (str(p.method) ?? 'other means')}`,
+  'order.draft_expired': () => 'Cleared: untouched for a year',
   'booking.requested': (p) => `Booking ${p.status === 'confirmed' ? 'made' : 'requested'} for ${num(p.party_size) ?? ''} ${num(p.party_size) === 1 ? 'guest' : 'guests'}`,
   'booking.confirmed': (p) => (p.auto === true ? 'Confirmed automatically' : 'Confirmed'),
   'booking.declined': () => 'Declined',
@@ -270,6 +328,10 @@ const EVENT_WORDS: Record<string, (p: Record<string, unknown>) => string> = {
   'booking.no_show': () => 'Marked a no-show',
   'booking.completed': () => 'Finished',
   'booking.reminded': () => 'Reminder sent to the guest',
+  'booking.abandoned': (p) => `Counted as didn't finish: the request waited ${num(p.hours_waiting) ?? ''} h for a yes`.replace(/\s+h/, ' h'),
+  'booking.nudged': (p) => (p.status === 'suppressed' ? 'Nudge not sent: the address is blocked' : `Nudge sent by ${p.via === 'sms' ? 'text message' : 'email'}`),
+  'booking.recovered': () => 'Recovered: confirmed after all',
+  'booking.purged': () => "Guest's details removed (three months unanswered)",
   'customer.created': (p) => `First seen${str(p.via) ? ` via ${str(p.via)!.replace(/_/g, ' ')}` : ''}`,
   'customer.merged': () => 'Two records were merged into this one',
   'consent.changed': (p) => `${p.action === 'granted' ? 'Said yes to' : 'Withdrew'} ${CONSENT_WORDS[str(p.purpose) ?? ''] ?? 'a consent'}`,
@@ -284,6 +346,7 @@ const EVENT_WORDS: Record<string, (p: Record<string, unknown>) => string> = {
   'review.posted': () => 'Left a review',
   'offer.code_issued': () => 'Was given an offer code',
   'offer.code_redeemed': () => 'Used an offer code',
+  'offer.applied': (p) => `An offer came off their bill by itself${num(p.discount_cents) !== null ? ` (${dollars(p.discount_cents)})` : ''}`,
 };
 
 export function describeEvent(name: string, properties: Record<string, unknown>): string | null {
@@ -315,6 +378,10 @@ const TOOL_WORDS: Record<string, string> = {
   menu_set_availability: "86'd or restored a menu item",
   orders_list: 'read the orders',
   order_decide: 'accepted or rejected an order',
+  order_nudge: 'nudged a guest about an unfinished order',
+  order_draft_create: 'built a phone or function order',
+  order_pay_link_send: 'sent a pay link for a phone or function order',
+  order_mark_paid: 'marked a phone or function order paid',
   bookings_today: "read today's bookings",
   bookings_list: 'read the bookings',
   booking_availability: 'checked booking availability',
@@ -322,6 +389,7 @@ const TOOL_WORDS: Record<string, string> = {
   booking_decline: 'declined a booking',
   booking_cancel: 'cancelled a booking',
   booking_add: 'took a booking',
+  booking_nudge: 'nudged a guest about an unanswered booking request',
   guest_lookup: 'looked a guest up',
   reviews_list: 'read the reviews',
   review_reply_draft: 'drafted a review reply',

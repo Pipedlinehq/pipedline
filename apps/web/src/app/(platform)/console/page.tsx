@@ -8,16 +8,19 @@ import { digestsFor, show } from '@/lib/console-analytics';
 import { read } from '@/lib/console-read';
 import { Badge, Card, EmptyState, LinkButton, PageHeader, StatTile, dateTime } from '@/ui';
 import { DecideButtons, REQUESTER } from '@/components/console/approval-bits';
+import { AttentionStrip, GuidanceCards, Suggestions } from '@/components/console/home-bits';
 import { ReadError } from '@/components/console/states';
-import { decideFromHome } from './home-actions';
+import { approveSuggestionAction, decideFromHome, dismissCardAction, dismissSuggestionAction } from './home-actions';
 
 export const metadata = { title: 'Home · Pipedline' };
 
 /**
- * Home (docs/CONSOLE_IA.md section 2): today's service at a glance, what is waiting for the
- * person's yes, the week against last week, setup progress while the venue is not live, and
- * what the assistant did this week. Each block reads through the function that owns the fact
- * and shows nothing the person's role could not open on the fuller screen behind it.
+ * Home (docs/CONSOLE_IA.md section 2; section 9 pattern 8): today's service at a glance with the
+ * needs-attention counts that open the matching view, what is waiting for the person's yes,
+ * suggestions worked out from the records (approve runs a tool once; dismiss remembers why), the
+ * week against last week, setup progress while the venue is not live, guidance cards a person can
+ * put away, and what the assistant did this week. Each block reads through the function that owns
+ * the fact and shows nothing the person's role could not open on the fuller screen behind it.
  */
 export default async function ConsoleHome() {
   const c = await getConsole();
@@ -27,7 +30,7 @@ export default async function ConsoleHome() {
   const tz = c.venue.timezone;
   const venueId = c.venue.id;
 
-  const [sales, book, bookNumbers, live, flagged, ops, waiting, week, digests, setup, calls, runs] = await Promise.all([
+  const [sales, book, bookNumbers, live, flagged, ops, waiting, week, digests, setup, calls, runs, attention, cards, suggestions] = await Promise.all([
     read((ctx) => analytics.salesSummary(ctx, { venueId })),
     on.bookings && guestFacing ? read((ctx) => bookings.listBookings(ctx, { venueId })) : null,
     on.bookings && !guestFacing
@@ -45,16 +48,17 @@ export default async function ConsoleHome() {
     c.isOwner ? read((ctx) => onboarding.getSetupStatus(ctx, venueId)) : null,
     manager && on.hub ? read((ctx) => hub.listAgentCalls(ctx, { limit: 200 })) : null,
     manager && on.hub ? read((ctx) => hub.listAgentRuns(ctx, { venueId, limit: 100 })) : null,
+    read((ctx) => hub.needsAttention(ctx, { venueId })),
+    read((ctx) => hub.homeCards(ctx)),
+    manager ? read((ctx) => hub.suggestions(ctx, { venueId })) : null,
   ]);
 
   const today = sales.ok ? sales.data.windows.find((w) => w.window === 'today_so_far') : undefined;
   const covers = book?.ok ? book.data.totals.covers : bookNumbers?.ok ? bookNumbers.data.covers : null;
   const requests = book?.ok ? book.data.totals.requests : null;
   const liveOrders = live?.ok ? live.data.length : null;
-  const attention = [
-    ...(flagged?.ok && flagged.data.length ? [`${flagged.data.length} ${flagged.data.length === 1 ? 'order needs' : 'orders need'} a look.`] : []),
-    ...(ops?.ok ? ops.data.findings : []),
-  ];
+  // Live findings in words (a service that stopped, a quiet service): the counts are in the strip.
+  const findings = ops?.ok ? ops.data.findings.filter((f) => !/^Order /.test(f)) : [];
   const pending = waiting?.ok ? waiting.data : [];
   const venueName = (id: string | null) => (id ? (c.venues.find((v) => v.id === id)?.name ?? 'Another venue') : 'Whole organisation');
 
@@ -97,26 +101,20 @@ export default async function ConsoleHome() {
           ) : sales.ok ? null : (
             <ReadError message={sales.error} />
           )}
-          <div className="rounded-card border border-line bg-surface p-4" data-testid="home-attention">
-            <p className="text-sm text-ink-2">Needs attention</p>
-            {attention.length ? (
-              <ul className="mt-1.5 space-y-1 text-sm text-ink">
-                {attention.slice(0, 3).map((a) => (
-                  <li key={a}>{a}</li>
-                ))}
-              </ul>
-            ) : (
-              <p className="mt-1 font-display text-[1.75rem] font-medium text-ink">Nothing</p>
-            )}
-            {attention.length && on.ordering ? (
-              <Link href="/console/orders?view=attention" className="mt-2 inline-block text-sm text-accent">
-                Open orders needing attention
-              </Link>
-            ) : null}
-          </div>
+          {attention.ok ? <AttentionStrip n={attention.data} /> : <ReadError message={attention.error} />}
         </div>
+        {findings.length ? (
+          <ul className="mt-3 space-y-1 text-sm text-warn" data-testid="home-findings">
+            {findings.slice(0, 3).map((a) => (
+              <li key={a}>{a}</li>
+            ))}
+          </ul>
+        ) : null}
         {sales.ok ? <p className="mt-3 text-sm text-ink-2">{sales.data.summary}</p> : null}
       </section>
+
+      {/* Suggestions */}
+      {manager && suggestions ? suggestions.ok ? <Suggestions items={suggestions.data} approve={approveSuggestionAction} dismiss={dismissSuggestionAction} /> : <ReadError message={suggestions.error} /> : null}
 
       {/* Waiting for your yes */}
       {manager ? (
@@ -236,6 +234,9 @@ export default async function ConsoleHome() {
           </Card>
         </section>
       ) : null}
+
+      {/* Guidance cards, each one put away per person */}
+      {cards.ok ? <GuidanceCards cards={cards.data.filter((card) => (card.minRole === 'owner' ? c.isOwner : card.minRole === 'manager' ? manager : true))} dismiss={dismissCardAction} /> : null}
 
       {/* What your assistant did this week */}
       {manager && on.hub ? (

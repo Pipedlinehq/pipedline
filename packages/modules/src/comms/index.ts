@@ -7,3 +7,5 @@ export * from './identities';
 export * from './connected';
 export * from './esp';
 export * from './conversions';
+export * from './alerts';
+export * from './alert-tools';

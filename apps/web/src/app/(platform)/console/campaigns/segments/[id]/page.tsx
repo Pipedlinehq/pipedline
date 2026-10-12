@@ -73,7 +73,19 @@ async function Detail({ id, c, created }: { id: string; c: ConsoleContext; creat
             {rows ? (
               <SegmentForm save={saveSegmentAction} preview={previewRuleAction} venues={venues} initial={{ name: `${s.name} (copy)`, description: s.description, join: rows.join, rows: rows.rows }} />
             ) : (
-              <p className="text-sm text-ink-2">This rule nests conditions more deeply than the form here can edit. It can still be used in a campaign as it is.</p>
+              <p className="text-sm text-ink-2">
+                {s.query ? (
+                  <>
+                    A built-in guest list, written in plain words. Copy it under{' '}
+                    <a href={`/console/customers/lists/${s.id}`} className="text-accent hover:underline">
+                      Customers, Guest lists
+                    </a>
+                    .
+                  </>
+                ) : (
+                  'This rule nests conditions more deeply than the form here can edit. It can still be used in a campaign as it is.'
+                )}
+              </p>
             )}
           </Card>
         ) : (
@@ -81,7 +93,19 @@ async function Detail({ id, c, created }: { id: string; c: ConsoleContext; creat
             {rows ? (
               <SegmentForm save={saveSegmentAction} preview={previewRuleAction} venues={venues} initial={{ id: s.id, name: s.name, description: s.description, join: rows.join, rows: rows.rows }} />
             ) : (
-              <p className="text-sm text-ink-2">This rule nests conditions more deeply than the form here can edit (it was probably made by an assistant). It still works; to change it, make a new segment.</p>
+              <p className="text-sm text-ink-2">
+                {s.query ? (
+                  <>
+                    This list is written in plain words. Change it under{' '}
+                    <a href={`/console/customers/lists/${s.id}`} className="text-accent hover:underline">
+                      Customers, Guest lists
+                    </a>
+                    .
+                  </>
+                ) : (
+                  'This rule nests conditions more deeply than the form here can edit (it was probably made by an assistant). It still works; to change it, make a new segment.'
+                )}
+              </p>
             )}
           </Card>
         )

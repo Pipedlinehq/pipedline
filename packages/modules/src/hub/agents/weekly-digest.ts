@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { type App, addDays, defineJob, defineSchedule, localParts, sql, zonedTimeToUtc } from '@ros/core';
+import { alertRecipients } from '../../comms/alerts';
 import { queueMessage } from '../../comms/outbox';
 import { defineTemplate } from '../../comms/templates';
 import { consoleUrl } from '../confirm';
@@ -234,11 +235,17 @@ export async function weeklyDigestBody(run: HostedRun): Promise<{ summary: strin
       check: (out) => checkFigures(`${out.subject}\n${noteText(out)}`, facts),
     });
 
-    // 3. Send to the owners through the outbox, or (shadow) only record what would have gone.
+    // 3. Send through the outbox, or (shadow) only record what would have gone. The recipients are
+    //    whoever the venue's "weekly digest" alert rules name (Settings → Notifications), by email;
+    //    with no rule, the owners, as before.
     const result: DigestNoteResult = { target: target.slug, venue: target.name, week: { from: digest.period.from, to: digest.period.to }, subject: note.subject, note: noteText(note), recorded: digest.summary, recipients: 0, sent: false };
     if (run.mode !== 'shadow') {
       result.recipients = await run.app.tenant(run.orgId, WORKER, async (ctx) => {
-        const owners = await ctx.db.selectFrom('staff').select(['id', 'first_name', 'email']).where('is_owner', '=', true).where('status', '!=', 'disabled').execute();
+        const venueIds = target.slug ? run.venues.filter((v) => v.slug === target.slug).map((v) => v.id) : run.venues.map((v) => v.id);
+        const named = (await alertRecipients(ctx, 'digest.weekly', venueIds)).filter((p) => p.channel === 'email');
+        const owners = named.length
+          ? named.map((p) => ({ id: p.id, first_name: p.firstName, email: p.email }))
+          : await ctx.db.selectFrom('staff').select(['id', 'first_name', 'email']).where('is_owner', '=', true).where('status', '!=', 'disabled').execute();
         let queued = 0;
         for (const o of owners) {
           const r = await queueMessage(ctx, {

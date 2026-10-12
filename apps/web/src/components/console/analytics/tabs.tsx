@@ -5,6 +5,7 @@ export function AnalyticsTabs({ current, query, manager }: { current: string; qu
   const q = query ? `?${query}` : '';
   const items = [
     { href: '/console/analytics', label: 'Sales' },
+    { href: '/console/analytics/reports', label: 'Reports' },
     { href: '/console/analytics/overview', label: 'Overview' },
     { href: '/console/analytics/menu', label: 'Menu' },
     { href: '/console/analytics/customers', label: 'Customers' },

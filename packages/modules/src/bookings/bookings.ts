@@ -8,6 +8,7 @@ import {
   assertModule,
   audit,
   conflict,
+  defineJob,
   enqueue,
   forbidden,
   invalid,
@@ -30,11 +31,13 @@ import { REFUSAL_WORDS, type Service, heldBookings, localTime, refusalFor, servi
 import { bookingIdFromToken, bookingReminderJob, manageToken, manageUrl, notifyGuest } from './messages';
 import {
   type BookingsConfig,
+  bookingAbandoned,
   bookingCancelled,
   bookingCompleted,
   bookingConfirmed,
   bookingDeclined,
   bookingNoShow,
+  bookingRecovered,
   bookingRequested,
   bookingSeated,
   bookingsModule,
@@ -85,6 +88,11 @@ const COLS = [
   'finished_at',
   'reminded_at',
   'created_at',
+  'abandoned_at',
+  'nudge_sent_at',
+  'nudge_status',
+  'recovered_at',
+  'purged_at',
 ] as const;
 
 export interface BookingRow {
@@ -114,6 +122,11 @@ export interface BookingRow {
   finished_at: Date | null;
   reminded_at: Date | null;
   created_at: Date;
+  abandoned_at: Date | null;
+  nudge_sent_at: Date | null;
+  nudge_status: string | null;
+  recovered_at: Date | null;
+  purged_at: Date | null;
 }
 
 /** A booking as staff see it. Guest-written text (`guestName`, `guestNote`) is untrusted: render it as text. */
@@ -144,9 +157,18 @@ export interface BookingView {
   customerId: string | null;
   createdAt: Date;
   remindedAt: Date | null;
+  /** How many of this guest's bookings (across the organisation) ended as no-shows. 0 for a guest with no record. Read-only. */
+  noShowCount: number;
+  // Didn't finish: a request the venue never answered inside its window.
+  abandonedAt: Date | null;
+  nudgeSentAt: Date | null;
+  /** 'queued', or 'suppressed:<reason>', once a nudge was sent. */
+  nudgeStatus: string | null;
+  recoveredAt: Date | null;
+  purgedAt: Date | null;
 }
 
-const view = (r: BookingRow, tz: string): BookingView => ({
+const view = (r: BookingRow, tz: string, noShows?: Map<string, number>): BookingView => ({
   id: r.id,
   reference: r.reference,
   venueId: r.venue_id,
@@ -170,7 +192,32 @@ const view = (r: BookingRow, tz: string): BookingView => ({
   customerId: r.customer_id,
   createdAt: r.created_at,
   remindedAt: r.reminded_at,
+  noShowCount: r.customer_id ? (noShows?.get(r.customer_id) ?? 0) : 0,
+  abandonedAt: r.abandoned_at,
+  nudgeSentAt: r.nudge_sent_at,
+  nudgeStatus: r.nudge_status,
+  recoveredAt: r.recovered_at,
+  purgedAt: r.purged_at,
 });
+
+/** How many no-shows each guest among these bookings has on record, across the organisation. */
+async function noShowCounts(ctx: Ctx, rows: Array<Pick<BookingRow, 'customer_id'>>): Promise<Map<string, number>> {
+  const ids = [...new Set(rows.map((r) => r.customer_id).filter((v): v is string => !!v))];
+  if (!ids.length) return new Map();
+  const counts = await ctx.db
+    .selectFrom('bookings')
+    .select((eb) => ['customer_id', eb.fn.countAll<number>().as('n')])
+    .where('customer_id', 'in', ids)
+    .where('status', '=', 'no_show')
+    .groupBy('customer_id')
+    .execute();
+  return new Map(counts.map((c) => [c.customer_id!, Number(c.n)]));
+}
+
+/** One booking as staff see it, with the guest's no-show count. */
+async function staffView(ctx: Ctx, r: BookingRow, tz: string): Promise<BookingView> {
+  return view(r, tz, await noShowCounts(ctx, [r]));
+}
 
 /** What a guest sees of their own booking. No staff notes, no contact details, no internal ids. */
 export interface GuestBookingView {
@@ -594,10 +641,34 @@ async function afterCreate(ctx: Ctx, cfg: BookingsConfig, row: BookingRow, opts:
       await notifyGuest(ctx, row, 'confirmed');
       await enqueueReminder(ctx, cfg, row);
     }
-  } else if (opts.notify) {
-    await notifyGuest(ctx, row, 'requested');
+  } else {
+    if (opts.notify) await notifyGuest(ctx, row, 'requested');
+    // A request the venue has not answered when its window runs out (or its time arrives) is "didn't finish".
+    const windowEnds = addMinutes(ctx.now(), cfg.request_window_hours * 60);
+    await enqueue(ctx, detectAbandonedBookingJob, { bookingId: row.id }, { key: `abandon:${row.id}`, runAt: windowEnds < row.booked_for ? windowEnds : row.booked_for });
   }
 }
+
+/**
+ * The "didn't finish" check for a booking request (docs/COMMERCE_ADMIN_PATTERNS.md pattern 7).
+ * The bookings flow records no "started" step (a request is written whole, and the guest plugin's
+ * two-step is a signed token, never a row), so the unfinished booking here is the request the
+ * venue never answered inside its window. Marked and listed; nothing is sent. Safe to run twice.
+ */
+export const detectAbandonedBookingJob = defineJob({
+  kind: 'bookings.detect_abandoned',
+  schema: z.object({ bookingId: z.string().uuid() }),
+  async handler(app, job) {
+    if (!job.orgId) throw new Error('bookings.detect_abandoned needs an org');
+    await app.tenant(job.orgId, { kind: 'worker', job: 'bookings.detect_abandoned' }, async (ctx) => {
+      const row = (await ctx.db.selectFrom('bookings').select(COLS).where('id', '=', job.payload.bookingId).forUpdate().executeTakeFirst()) as BookingRow | undefined;
+      if (!row || row.status !== 'requested' || row.abandoned_at || row.purged_at) return;
+      const now = ctx.now();
+      await ctx.db.updateTable('bookings').set({ abandoned_at: now, updated_at: now }).where('id', '=', row.id).execute();
+      await track(ctx, bookingAbandoned, { booking_id: row.id, party_size: row.party_size, hours_waiting: Math.round((now.getTime() - row.created_at.getTime()) / 3_600_000) }, { venueId: row.venue_id, customerId: row.customer_id });
+    });
+  },
+});
 
 async function withToken(ctx: Ctx, row: BookingRow, venue: VenueView): Promise<RequestedBooking> {
   const token = await manageToken(ctx.app, ctx.orgId, row.id);
@@ -678,6 +749,9 @@ async function applyStatus(ctx: Ctx, row: BookingRow, to: BookingStatus, opts: {
   }
   if (to === 'seated') set.seated_at = now;
   if (to === 'completed' || to === 'no_show') set.finished_at = now;
+  // A request listed under "didn't finish" that is now confirmed or seated is recovered.
+  const recovering = !!row.abandoned_at && !row.recovered_at && !row.purged_at && (to === 'confirmed' || to === 'seated' || to === 'completed');
+  if (recovering) set.recovered_at = now;
   const after = (await ctx.db.updateTable('bookings').set(set).where('id', '=', row.id).returning(COLS).executeTakeFirstOrThrow()) as BookingRow;
   await recordHistory(ctx, row.id, row.status, to);
   await audit(ctx, {
@@ -690,6 +764,7 @@ async function applyStatus(ctx: Ctx, row: BookingRow, to: BookingStatus, opts: {
   });
   const ev = { venueId: row.venue_id, customerId: row.customer_id };
   const cfg = await assertModule(ctx, row.venue_id, bookingsModule);
+  if (recovering) await track(ctx, bookingRecovered, { booking_id: row.id, party_size: row.party_size }, ev);
   switch (to) {
     case 'confirmed':
       await track(ctx, bookingConfirmed, { booking_id: row.id, party_size: row.party_size, source: row.source, auto: false }, ev);
@@ -743,7 +818,7 @@ async function loadForStaff(ctx: Ctx, bookingId: string, opts: { lock?: boolean 
 export async function checkStatusChange(ctx: Ctx, bookingId: string, to: BookingStatus): Promise<BookingView> {
   const { row, venue } = await loadForStaff(ctx, z.string().uuid().parse(bookingId));
   if (row.status !== to) assertMove(row, to, ctx.now());
-  return view(row, venue.timezone);
+  return staffView(ctx, row, venue.timezone);
 }
 
 function assertMove(row: BookingRow, to: BookingStatus, now: Date): void {
@@ -756,9 +831,9 @@ function assertMove(row: BookingRow, to: BookingStatus, now: Date): void {
 async function staffChange(ctx: Ctx, bookingId: string, to: BookingStatus, reason: string | null): Promise<BookingView> {
   const { row, venue } = await loadForStaff(ctx, bookingId, { lock: true });
   // The same change twice is one change.
-  if (row.status === to) return view(row, venue.timezone);
+  if (row.status === to) return staffView(ctx, row, venue.timezone);
   assertMove(row, to, ctx.now());
-  return view(await applyStatus(ctx, row, to, { by: 'staff', reason }), venue.timezone);
+  return staffView(ctx, await applyStatus(ctx, row, to, { by: 'staff', reason }), venue.timezone);
 }
 
 /** Confirm a booking request. Host or front of house and above. The guest is sent a confirmation. */
@@ -901,7 +976,7 @@ export async function addBooking(ctx: Ctx, raw: z.input<typeof addBookingInput>)
     requestKey: null,
   });
   await afterCreate(ctx, cfg, row, { auto: false, notify: plan.notifyGuest });
-  return view(row, plan.venue.timezone);
+  return staffView(ctx, row, plan.venue.timezone);
 }
 
 // ── Staff: reading ───────────────────────────────────────────────────────────
@@ -909,7 +984,7 @@ export async function addBooking(ctx: Ctx, raw: z.input<typeof addBookingInput>)
 /** A booking by id, as staff see it. Host or front of house and above. */
 export async function getBooking(ctx: Ctx, raw: z.input<typeof bookingIdInput>): Promise<BookingView> {
   const { row, venue } = await loadForStaff(ctx, bookingIdInput.parse(raw).bookingId);
-  return view(row, venue.timezone);
+  return staffView(ctx, row, venue.timezone);
 }
 
 export const findBookingInput = z.object({ venueId: z.string().uuid(), reference: z.string().trim().min(1).max(20) }).strict();
@@ -922,7 +997,7 @@ export async function findBookingByReference(ctx: Ctx, raw: z.input<typeof findB
   const venue = await getVenue(ctx, input.venueId);
   const row = await ctx.db.selectFrom('bookings').select(COLS).where('venue_id', '=', input.venueId).where('reference', '=', input.reference.toUpperCase()).executeTakeFirst();
   if (!row) throw notFound('No booking here has that reference.');
-  return view(row as BookingRow, venue.timezone);
+  return staffView(ctx, row as BookingRow, venue.timezone);
 }
 
 export const searchBookingsInput = z.object({ venueId: z.string().uuid(), q: z.string().trim().min(2).max(100), limit: z.number().int().min(1).max(50).default(10) }).strict();
@@ -948,7 +1023,8 @@ export async function searchBookings(ctx: Ctx, raw: z.input<typeof searchBooking
     .orderBy(sql`abs(extract(epoch from (booked_for - ${now})))`)
     .limit(input.limit)
     .execute()) as BookingRow[];
-  return rows.map((r) => view(r, venue.timezone));
+  const noShows = await noShowCounts(ctx, rows);
+  return rows.map((r) => view(r, venue.timezone, noShows));
 }
 
 const STATUS_LIST = z.array(z.enum(['requested', 'confirmed', 'declined', 'cancelled', 'seated', 'no_show', 'completed'])).min(1).max(7);
@@ -1040,13 +1116,14 @@ export async function listBookings(ctx: Ctx, raw: z.input<typeof listBookingsInp
     }
   }
   const shown = input.status || input.show === 'all' ? rows : rows.filter((r) => ACTIVE.includes(r.status));
+  const noShows = await noShowCounts(ctx, shown);
   return {
     venueId: venue.id,
     timezone: venue.timezone,
     date,
     ...(to ? { to } : {}),
     services,
-    bookings: shown.map((r) => view(r, venue.timezone)),
+    bookings: shown.map((r) => view(r, venue.timezone, noShows)),
     totals: {
       bookings: rows.filter((r) => COUNTED.includes(r.status) || r.status === 'requested').length,
       covers: rows.filter((r) => COUNTED.includes(r.status)).reduce((n, r) => n + r.party_size, 0),

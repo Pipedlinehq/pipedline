@@ -8,8 +8,9 @@ budget and usage.
 
 **Toggleable** (`hub`, depends on nothing). Owns `agent_keys`, `agent_calls` (@append_only),
 `agent_confirmations`, `plug_reviews` (@reference), `agent_runs`, `agent_oauth_clients`
-(@platform), `agent_oauth_codes`, `agent_oauth_tokens`, `llm_usage` (@append_only).
-Migrations: 0006 and 0450 (0650 adds two `jobs` indexes the scale test called for).
+(@platform), `agent_oauth_codes`, `agent_oauth_tokens`, `llm_usage` (@append_only), and since the
+console depth pass (wave 2, patterns 8 and 14) `home_dismissals`, `home_suggestion_decisions`.
+Migrations: 0006, 0450 (0650 adds two `jobs` indexes the scale test called for), 0802.
 
 ## Public functions by purpose
 
@@ -51,6 +52,31 @@ Other modules / internal:
   `figure`; `runOpsWatch(app, {orgId, trigger})`, `opsWatchBody`, `agentOnAnywhere`.
 - `llmUsageStore(() => app)` the budget/usage store the Anthropic adapter is built with (runtime wires it).
 
+Home (`home.ts`; docs/CONSOLE_IA.md section 9, pattern 8; the console's `/console`). Hub is where these live because a
+suggestion is approved by running an assistant tool; none of them asserts the hub switch:
+- `needsAttention(ctx, {venueId})` any staff role → counts by type, each from the owning module's own list with the same
+  filters its page uses and a link to that view: `listOrders({statuses:['placed']})` → `/console/orders?view=accepting`,
+  `listOrders({needsAttention})` → `?view=attention`, `listBookings({date: today, to: today+59, status:['requested']})` →
+  `/console/bookings?view=confirming`, `listApprovals({status:'pending'})` (org-wide or this venue) → `/console/approvals`,
+  `listReviews({onlyUnanswered})` → `/console/reviews?show=unanswered`, `getMenuEditor(venueId, {availability:'off'})` →
+  `/console/menu?view=soldout`. A module that is off or a role that may not look leaves the item out (never a zero).
+- `homeCards(ctx)` / `dismissCard(ctx, {card})` — `HOME_CARDS` (guidance) minus the person's `home_dismissals`; per staff member.
+- `suggestions(ctx, {venueId})` manager+ → at most `SUGGESTION_CAP` (5), derived from `opsStatus` (a paid order waiting →
+  action `order_decide {order, decision:'accept'}`; an unhealthy connection → a page) and the latest stored weekly digest
+  (a flagged finding that reads badly; an item that fell strongly), minus the venue's `home_suggestion_decisions`.
+  No model is asked. `approveSuggestion(ctx, {venueId, key})` writes the decision row first (unique per venue and key, so a
+  replay is `conflict`), then the tool's own `propose` → `commit` once, as the person; `dismissSuggestion(ctx, {venueId, key, reason?})`.
+  Audit `home.suggestion_approved|suggestion_dismissed`.
+- Tools: `needs_attention` (read, `ops:read`, venueScoped), `suggestion_dismiss` (write, `ops:write`, manager, venueScoped).
+
+Plug detail (`plug-detail.ts`; pattern 14; `/console/plugins/[key]`):
+- `plugDetail(ctx, {venueId, key})` manager+ → the `pluginCatalogueForVenue` entry, `tools` with last-used, last outcome and
+  30-day count from `agent_calls` (`plug_key = 'os'` by tool name for a module; `plug_key = <key>` for a plug), `connections`
+  (status, account, connected/last-ok/expires, scopes, last error), `lastUsedAt` (a tool call; for a till or email platform
+  also its last successful post; a health check is never a use), `idleNote` when a connected plug has done nothing for
+  `IDLE_AFTER_DAYS` (30) since its last use or its connection, `dataLeaves` (per plug key, in plain words; Criota: per-venue
+  outcomes above the minimum cohort, never guest-level) and `offeredToAssistantsHere` (mcp plugs: `enabled_plugs`).
+
 ## Hooks
 - Registers on `auth.onStaffDisabled` (revokes the person's keys and sign-ins), core `onConnectionRevoked`
   (revokes service keys made for that connection), `onboarding.onOrgClosing` (`lifecycle.ts`: revokes every key).
@@ -80,9 +106,10 @@ A level per venue (`hosted_agents` lists it; `autonomy_level_per_agent` raises i
 Jobs/schedules: `hub.prune_confirmations` (daily), `hub.check_plugs` (every 15 min), `hub.weekly_digest` (hourly check; sends
 once a week from Monday 07:00 org time), `hub.ops_watch` (every 15 min); the last two only for orgs with the agent listed at a
 venue. Templates: plug-unhealthy notice (`health.ts`), `hub.weekly_digest` (transactional email to owners). Plugs: `criota`,
-`criota-sim` (simulated). Tools: `ops_status` (read, `ops:read`, manager); otherwise it serves every module's `defineTool` and
-each connected plug's reviewed tools (`<namespace>__<tool>`). Hosted agents: `weekly_digest` (ceiling autonomous, scope
-`metrics:read`, read-only role), `ops_watch` (ceiling supervised, scopes `ops:read`, `orders:write`).
+`criota-sim` (simulated). Tools: `ops_status` (read, `ops:read`, manager), `needs_attention`, `suggestion_dismiss`; otherwise it
+serves every module's `defineTool` and each connected plug's reviewed tools (`<namespace>__<tool>`). Hosted agents:
+`weekly_digest` (ceiling autonomous, scope `metrics:read`, read-only role; its email goes to whoever the venue's `digest.weekly`
+alert rules name, `comms.alertRecipients`, else the owners), `ops_watch` (ceiling supervised, scopes `ops:read`, `orders:write`).
 `agent_calls.actor_kind`: `agent_key` | `oauth_assistant` | `service_key` | `hosted_agent`.
 
 ## Simulated vs real

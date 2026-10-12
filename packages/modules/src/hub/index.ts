@@ -16,6 +16,8 @@ export * from './ops';
 export * from './agents/weekly-digest';
 export * from './agents/ops-watch';
 export * from './activity';
+export * from './home';
+export * from './plug-detail';
 export * from './address';
 export * from './oauth';
 import './lifecycle';

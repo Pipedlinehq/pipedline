@@ -62,6 +62,8 @@ interface MenuItem {
   name: string;
   section: string;
   available: boolean;
+  /** For a sold-out dish: "back 9:30 pm", "back Fri 2 Oct, 12:00 pm" or "until put back". */
+  backWords?: string | null;
 }
 
 /** The 86 button (docs/modules/ordering.md section 1): one tap takes a dish off the site, the QR menu and ordering until the end of service. */
@@ -89,9 +91,9 @@ export function EightySixPanel({ offline, onClose }: { offline: boolean; onClose
     setError(null);
     try {
       const res = await fetch('/kitchen/api/menu', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ itemId: item.id, available: !item.available }) });
-      const body = (await res.json().catch(() => null)) as { available?: boolean; error?: { message?: string } } | null;
+      const body = (await res.json().catch(() => null)) as { available?: boolean; backWords?: string | null; error?: { message?: string } } | null;
       if (!res.ok) throw new Error(body?.error?.message ?? 'That could not be changed.');
-      setItems((list) => list?.map((i) => (i.id === item.id ? { ...i, available: Boolean(body?.available) } : i)) ?? null);
+      setItems((list) => list?.map((i) => (i.id === item.id ? { ...i, available: Boolean(body?.available), backWords: body?.backWords ?? null } : i)) ?? null);
     } catch (e) {
       setError((e as Error).message === 'Failed to fetch' ? 'No connection. Try again when the screen is back online.' : (e as Error).message);
     } finally {
@@ -127,7 +129,14 @@ export function EightySixPanel({ offline, onClose }: { offline: boolean; onClose
                   className={`flex min-h-20 items-center justify-between gap-3 rounded-xl px-4 text-left text-xl font-bold disabled:opacity-50 ${i.available ? 'border-4 border-slate-600 bg-[#1a1d23] active:bg-slate-700' : 'border-4 border-red-500 bg-red-950 line-through decoration-4 active:bg-red-900'}`}
                 >
                   <span>{i.name}</span>
-                  <span className={`shrink-0 rounded px-2 py-1 text-base no-underline ${i.available ? 'bg-emerald-500 text-black' : 'bg-red-500 text-white'}`}>{i.available ? 'ON' : "86'D"}</span>
+                  <span className="flex shrink-0 flex-col items-end gap-1 no-underline">
+                    <span className={`rounded px-2 py-1 text-base ${i.available ? 'bg-emerald-500 text-black' : 'bg-red-500 text-white'}`}>{i.available ? 'ON' : "86'D"}</span>
+                    {!i.available && i.backWords ? (
+                      <span className="text-sm font-semibold text-red-200" data-testid={`back-${i.id}`}>
+                        {i.backWords}
+                      </span>
+                    ) : null}
+                  </span>
                 </button>
               ))}
           </div>

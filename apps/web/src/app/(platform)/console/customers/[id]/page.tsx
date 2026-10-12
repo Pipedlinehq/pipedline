@@ -106,6 +106,12 @@ export default async function CustomerPage({ params }: { params: Promise<{ id: s
                 <Field label="Birthday">
                   <Input name="birthday" type="date" defaultValue={g.birthday ?? ''} />
                 </Field>
+                <Field label="Suburb" hint="Guest lists can ask “suburb is Newtown”.">
+                  <Input name="suburb" defaultValue={g.suburb ?? ''} maxLength={80} />
+                </Field>
+                <Field label="Postcode">
+                  <Input name="postcode" defaultValue={g.postcode ?? ''} maxLength={12} />
+                </Field>
               </div>
               <Field label="Allergies and dietary needs" hint="Shown to staff taking their orders.">
                 <Textarea name="allergyNotes" defaultValue={g.allergyNotes ?? ''} maxLength={2000} />

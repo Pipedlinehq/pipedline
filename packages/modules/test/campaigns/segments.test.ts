@@ -74,6 +74,8 @@ async function oracle(t: ReturnType<typeof useTestEnv>, org: FixtureOrg, today: 
     }
   };
   const evalRule = (r: Rule, c: (typeof customers)[number]): boolean => {
+    // Plain-words lists have their own oracle in guests-offers/lists.test.ts.
+    if ('query' in r) throw new Error('query rules are checked in guests-offers/lists.test.ts');
     if ('all' in r) return r.all.every((x) => evalRule(x, c));
     if ('any' in r) return r.any.some((x) => evalRule(x, c));
     if ('not' in r) return !evalRule(r.not, c);
@@ -128,14 +130,14 @@ describe('campaigns: segments', () => {
 
     it('a saved segment stores the tree, never SQL; the built-in ones cannot be changed or deleted', async () => {
       const manager = await diner().as('manager');
-      const s = await t.app.tenant(diner().orgId, manager, (ctx) => campaigns.saveSegment(ctx, { name: 'Big spenders', definition: { field: 'spend_cents', min: 50_000 } }));
+      const s = await t.app.tenant(diner().orgId, manager, (ctx) => campaigns.saveSegment(ctx, { name: 'Big spenders (rule tree)', definition: { field: 'spend_cents', min: 50_000 } }));
       const row = await t.db.selectFrom('segments').select(['definition', 'is_system']).where('id', '=', s.id).executeTakeFirstOrThrow();
       expect(row).toEqual({ definition: { field: 'spend_cents', min: 50_000 }, is_system: false });
       const audit = await t.db.selectFrom('audit_log').select('action').where('entity_id', '=', s.id).execute();
       expect(audit.map((a) => a.action)).toContain('segment.created');
-      const vip = (await t.app.tenant(diner().orgId, manager, (ctx) => campaigns.listSegments(ctx))).find((x) => x.name === 'VIP')!;
-      await expect(t.app.tenant(diner().orgId, manager, (ctx) => campaigns.saveSegment(ctx, { id: vip.id, name: 'VIP', definition: { field: 'orders', min: 1 } }))).rejects.toMatchObject({ code: 'invalid' });
-      await expect(t.app.tenant(diner().orgId, manager, (ctx) => campaigns.deleteSegment(ctx, vip.id))).rejects.toMatchObject({ code: 'invalid' });
+      const regulars = (await t.app.tenant(diner().orgId, manager, (ctx) => campaigns.listSegments(ctx))).find((x) => x.name === 'Regulars')!;
+      await expect(t.app.tenant(diner().orgId, manager, (ctx) => campaigns.saveSegment(ctx, { id: regulars.id, name: 'Regulars', definition: { field: 'orders', min: 1 } }))).rejects.toMatchObject({ code: 'invalid' });
+      await expect(t.app.tenant(diner().orgId, manager, (ctx) => campaigns.deleteSegment(ctx, regulars.id))).rejects.toMatchObject({ code: 'invalid' });
     });
   });
 
@@ -150,14 +152,15 @@ describe('campaigns: segments', () => {
     ];
 
     for (const org of ['diner', 'group'] as const) {
-      it(`every rule and every system segment, at ${org}`, async () => {
+      it(`every rule, at ${org}; the default lists are the plain-words ones`, async () => {
         const o = t.fixture[org];
         await t.app.tenant(o.orgId, WORKER, (ctx) => analytics.snapshotCustomers(ctx));
         const count = await oracle(t, o, '2026-09-30');
         const owner = await o.as('owner');
         const system = (await t.app.tenant(o.orgId, owner, (ctx) => campaigns.listSegments(ctx))).filter((s) => s.isSystem);
-        expect(system.map((s) => s.name).sort()).toEqual(['At risk', 'Lapsed 60+', 'New', 'One-timers', 'Regulars', 'VIP']);
-        const all: Array<[string, Rule]> = [...rules, ...system.map((s) => [s.name, s.definition] as [string, Rule])];
+        expect(system.map((s) => s.name).sort()).toEqual(['Big spenders', 'Lapsed 60+ days', 'New this month', 'Regulars', 'Said yes to email']);
+        expect(system.every((s) => s.query !== null)).toBe(true);
+        const all: Array<[string, Rule]> = [...rules];
         let nonEmpty = 0;
         for (const [name, rule] of all) {
           const got = await t.app.tenant(o.orgId, owner, (ctx) => campaigns.previewSegment(ctx, { definition: rule }));
@@ -211,7 +214,7 @@ describe('campaigns: segments', () => {
       await expect(t.app.tenant(o.orgId, manager, (ctx) => campaigns.listSegments(ctx))).rejects.toMatchObject({ code: 'module_disabled', status: 404 });
       await expect(t.app.tenant(o.orgId, manager, (ctx) => campaigns.previewSegment(ctx, { definition: { field: 'orders', min: 1 } }))).rejects.toMatchObject({ status: 404 });
       await t.app.tenant(o.orgId, WORKER, (ctx) => setModule(ctx, campaigns.campaignsModule, { venueId: o.venueId, enabled: true }));
-      expect((await t.app.tenant(o.orgId, manager, (ctx) => campaigns.listSegments(ctx))).length).toBeGreaterThanOrEqual(6);
+      expect((await t.app.tenant(o.orgId, manager, (ctx) => campaigns.listSegments(ctx))).length).toBeGreaterThanOrEqual(5);
     });
   });
 });

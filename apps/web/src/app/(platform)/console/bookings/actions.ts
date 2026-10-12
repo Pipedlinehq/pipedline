@@ -57,6 +57,18 @@ export async function addBooking(_prev: FormState, fd: FormData): Promise<FormSt
   );
 }
 
+/** The one nudge about a booking request the venue did not answer in its window. The service refuses a second. */
+export async function nudgeBooking(_prev: FormState, fd: FormData): Promise<FormState> {
+  const bookingId = text(fd, 'bookingId');
+  return act((ctx) => bookings.nudgeUnfinishedBooking(ctx, { bookingId }), {
+    success: (r) =>
+      r.status === 'queued'
+        ? `A nudge about booking ${r.booking.reference} is on its way by ${r.via === 'email' ? 'email' : 'text message'}. That is the only one the guest will get.`
+        : `The nudge about booking ${r.booking.reference} was not sent: ${(r.reason ?? 'the address is blocked').replace(/_/g, ' ')}. It will not be tried again.`,
+    revalidate: paths(bookingId),
+  });
+}
+
 const BULK_WORDS: Record<string, (n: number) => string> = {
   confirm: (n) => `${n} ${n === 1 ? 'booking' : 'bookings'} confirmed. The guests have been told.`,
   decline: (n) => `${n} ${n === 1 ? 'booking' : 'bookings'} declined. The guests have been told.`,

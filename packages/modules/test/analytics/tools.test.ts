@@ -21,6 +21,8 @@ const TOOLS: Record<string, string> = {
   insights_digest: 'metrics:read',
   event_dictionary: 'metrics:read',
   saved_view_run: 'metrics:read',
+  reports_list: 'metrics:read',
+  report_run: 'metrics:read',
 };
 
 describe('analytics: the assistant surface, saved views and export', () => {
@@ -62,10 +64,11 @@ describe('analytics: the assistant surface, saved views and export', () => {
     return needles.filter((n) => text.includes(n.toLowerCase())).slice(0, 5);
   };
 
-  it('declares the ten read tools, each with a scope, a careful description and strict shapes', () => {
+  it('declares the twelve read tools, each with a scope, a careful description and strict shapes', () => {
     const mine = listTools().filter((x) => x.module === 'analytics');
     expect(Object.fromEntries(mine.map((x) => [x.name, x.scope]))).toEqual(TOOLS);
     expect(analytics.analyticsTools).toHaveLength(10);
+    expect(analytics.reportTools).toHaveLength(2);
     for (const tool of mine) {
       expect(tool.effect, tool.name).toBe('read');
       expect(tool.venueScoped, tool.name).toBeFalsy();
@@ -113,6 +116,10 @@ describe('analytics: the assistant surface, saved views and export', () => {
       ['event_dictionary', {}],
       ['saved_view_run', {}],
       ['saved_view_run', { name: 'Weekly sales by channel' }],
+      ['reports_list', {}],
+      ['report_run', { report: 'guests.segments', period: 'last_90_days' }],
+      ['report_run', { report: 'guests.cohorts', period: 'last_365_days' }],
+      ['report_run', { report: 'marketing.campaigns', period: 'last_365_days', compare_to: 'previous_period' }],
     ];
     for (const fixture of [org(), t.fixture.group]) {
       for (const [name, args] of calls) {
@@ -321,7 +328,7 @@ describe('analytics: the assistant surface, saved views and export', () => {
     expect(logged).toEqual([{ tool: 'campaign_outcomes', effect: 'read', outcome: 'answered' }]);
 
     const analyst = await issue(['metrics:read', 'sales:read']);
-    expect(mine(analyst).map((o) => o.tool.name).sort()).toEqual(['event_dictionary', 'funnel_report', 'insights_digest', 'menu_performance', 'metrics_catalogue', 'metrics_query', 'sales_summary', 'saved_view_run']);
+    expect(mine(analyst).map((o) => o.tool.name).sort()).toEqual(['event_dictionary', 'funnel_report', 'insights_digest', 'menu_performance', 'metrics_catalogue', 'metrics_query', 'report_run', 'reports_list', 'sales_summary', 'saved_view_run']);
     const query = mine(analyst).find((o) => o.tool.name === 'metrics_query')!;
     const ok = await hub.runTool(t.app, analyst, query, { metrics: ['orders'], venue: 'newtown', period: 'last_28_days' });
     expect(ok).toMatchObject({ ok: true, output: { venues: { names: ['Oak Group Newtown'] } } });

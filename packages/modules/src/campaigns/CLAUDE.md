@@ -12,11 +12,13 @@ manager's approval and then in waves. Every message goes through `comms.queueMes
 `assertCampaignsOnSomewhere` (module on at a venue the caller can see, else not found).
 
 ## Public functions by purpose
-Segments:
-- `listSegments(ctx)`, `getSegment(ctx, id)` read_only. `saveSegment(ctx, saveSegmentInput)`, `deleteSegment(ctx, id)` manager.
-- `previewSegment(ctx, previewSegmentInput)` manager at the venue; counts and reachable share per channel.
-- `ensureSystemSegments(ctx)` idempotent (`SYSTEM_SEGMENTS`: New, One-timers, Lapsed 60+, At risk, Regulars, VIP).
-- Rule tree: `segmentRule`, `parseSegmentRule`, `compileSegmentRule`, `RFM_SEGMENTS`; leaves read `customers` and analytics' `fact_customer`.
+Segments, which the console calls **guest lists** (docs/CONSOLE_IA.md section 9, pattern 5; built 2026-10-13):
+- A segment's `definition` is either `{ query: "last visit more than 60 days ago and said yes to email" }` in the plain query language (parsed and compiled by the identity spine, `identity/list-grammar.ts` + `identity/lists.ts`; stored in its canonical wording) or the older condition tree (`all`/`any`/`not` over fixed leaves that read `customers` and analytics' `fact_customer`). `compileSegmentRule` handles both, so campaigns (`audienceWhere`, `sendCampaignWave`) and offers consume a list without knowing which. `isQueryRule`, `SegmentQuery`.
+- `listSegments(ctx)`, `getSegment(ctx, id)` read_only (`SegmentView` now carries `query` and `words`); `listSegments` creates the default lists an org is missing. `saveSegment(ctx, { id?, name, description?, definition? | query? })`, `deleteSegment(ctx, id)` manager; a list a campaign or an offer uses is kept (`conflict`).
+- `previewSegment(ctx, { segmentId? | definition? | query?, venueId? })` manager at the venue; counts and reachable share per channel, never a list of guests (the Customers index reads a list's members through `identity.listCustomers({ query })`).
+- `isSegmentMember(ctx, segmentId, customerId)` — live membership, for offer eligibility (no role check). `segmentNames(ctx, ids)` — for another module's summary. `segmentUsage(ctx, id)` — the campaigns that target the list (offers report theirs: `offers.offersUsingList`).
+- `ensureSystemSegments(ctx)` idempotent. `SYSTEM_SEGMENTS` are the five default lists, in the grammar, undeletable: Regulars (`visits more than 2 and last visit within the last 90 days`), New this month (`first visit within the last 30 days`), Said yes to email, Lapsed 60+ days (`last visit more than 60 days ago`), Big spenders (`spend more than $500`).
+- Rule tree: `segmentRule`, `parseSegmentRule`, `compileSegmentRule`, `RFM_SEGMENTS`. `CompileFrame` now carries `now`.
 One-off campaigns (loaded campaign at a venue with no role → not found):
 - `draftCampaign(ctx, draftCampaignInput)` manager; email needs subject, SMS body ≤ 480.
 - `updateCampaign(ctx, updateCampaignInput)` manager, draft only. `cancelCampaign(ctx, {campaignId})` manager.
@@ -52,7 +54,7 @@ Venue: `campaignsConfig = z.object({})`. Org settings namespace `campaigns`: `ca
 - Schedules (per org, when on at any venue): `campaigns.flow_run` hourly; `campaigns.expire_approvals` every 15 min (runs `approvals.expireApprovals`).
 - Events: `campaign.drafted`, `campaign.submitted`, `campaign.wave_queued`, `campaign.sent`, `flow.enrolled`, `flow.exited`, `flow.step_queued`.
 - Templates (marketing, email + sms): `campaigns.welcome`, `.post_purchase`, `.winback`, `.winback_reminder`, `.vip`, `.birthday`, `.campaign`.
-- Tools: `message_draft` (write, `campaigns:write`, manager; propose/commit saves a draft only), `campaigns_summary` (read, `campaigns:read`).
+- Tools: `message_draft` (write, `campaigns:write`, manager; propose/commit saves a draft only), `campaigns_summary` (read, `campaigns:read`), `guest_list_set` (write, `guest_lists:write`, manager; a rule in plain words, parsed before the question is asked; built-in lists refused), `guest_list_preview` (read, `guest_lists:read`, venue-scoped; counts, reachable by email/SMS, up to five first names).
 
 ## Simulated vs real
 No adapter of its own. Sending is comms' outbox and message adapter; copy uses the `llm` adapter
@@ -60,5 +62,6 @@ No adapter of its own. Sending is comms' outbox and message adapter; copy uses t
 (`comms/conversions.ts`) belong to comms, not here. Seeder `35-campaigns.ts`; tests `packages/modules/test/campaigns/`.
 
 ## Known gaps
+- Flows do not target a list: they enrol by their own triggers (consent, a purchase, lapse, birthday). A one-off campaign targets a list; `audienceWhere` is ready for a flow to use when one needs it.
 - `CampaignStatus` and `listCampaignsInput` include `scheduled`, but no code sets it (no scheduled send).
 - No `apps/` code calls these functions yet.

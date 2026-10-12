@@ -41,14 +41,14 @@ export const offersModule = defineModule({
   dependsOn: ['identity', 'ledger', 'comms'],
   manifest: {
     name: 'Offers',
-    purpose: 'One-off codes for a guest: welcome offers, vouchers, come-back offers, creator offers. Redeemed at online checkout, matched from a till sale, or marked off by front of house.',
+    purpose: 'Offers by code or applied automatically: welcome offers, vouchers, come-back offers, creator offers, specials for a guest list, a day or a service. Redeemed at online checkout, matched from a till sale, or marked off by front of house. Public holiday and Sunday surcharges live here too.',
     category: 'marketing',
     kind: 'module',
-    needs: ['Nothing to connect. Till discounts are matched to codes when the till is connected.'],
-    reads: ['sales (to see a code used at the till)', 'guest records'],
-    writes: ['offers and codes', 'redemptions'],
+    needs: ['Nothing to connect. Till discounts are matched to codes and automatic offers when the till is connected.'],
+    reads: ['sales (to see a code or an automatic offer used at the till)', 'guest records and guest lists', 'the venue\'s hours (which service it is)'],
+    writes: ['offers and codes', 'redemptions and uses', 'surcharges'],
   },
-  tables: ['offers', 'offer_codes'],
+  tables: ['offers', 'offer_codes', 'offer_uses', 'surcharges'],
   configSchema: offersConfig,
   configVersion: 1,
   defaultConfig: offersConfig.parse({}),
@@ -100,6 +100,19 @@ export const offerVoided = defineEvent({
   module: 'offers',
   description: 'A code was cancelled by the venue.',
   properties: codeProps,
+});
+
+export const offerApplied = defineEvent({
+  name: 'offer.applied',
+  module: 'offers',
+  description: 'An automatic offer (no code) came off a paid order or a till sale.',
+  properties: z.object({
+    offer_id: z.string(),
+    offer_kind: OFFER_KIND,
+    use_id: z.string(),
+    via: z.enum(['online', 'till']),
+    discount_cents: z.number().int().nullable(),
+  }),
 });
 
 export const offerRedemptionRefused = defineEvent({

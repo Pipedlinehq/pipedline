@@ -6,8 +6,9 @@ model. Also campaign/creator outcomes, the one shape in which results leave towa
 
 **Spine** (always on, no venue switch; depends on ledger, events, identity). Owns
 `fact_sales_daily`, `fact_sales_hourly`, `fact_item_daily`, `fact_customer`, `fact_events_daily`,
-`fact_campaign_daily`, `rollup_state`, `insight_digests`, `saved_views`, `benchmark_bands`. Only
-`fact_customer` holds a row about a person (see hooks). Migration 0600.
+`fact_campaign_daily`, `rollup_state`, `insight_digests`, `saved_views`, `benchmark_bands`, and
+since the console depth pass (wave 2, pattern 9) `report_definitions`, `report_targets`,
+`report_annotations`. Only `fact_customer` holds a row about a person (see hooks). Migrations 0600, 0800.
 
 ## Public functions by purpose
 Console (read-only staff and above unless noted; `resolveScope` answers a venue the caller has no role at as not found):
@@ -21,9 +22,27 @@ Console (read-only staff and above unless noted; `resolveScope` answers a venue 
 - `getBenchmarks(ctx, …)`, `dataDictionary(ctx?)`, `factsState(ctx)`, `resolveScope(ctx, venueIds?)`.
 Jobs/internal: `rollup(app, orgId)`, `backfill(app, …)`, `computeBenchmarks(app)`.
 
-## Assistant tools (`tools.ts`, all reads, not `venueScoped`)
+Reports (`reports.ts`; docs/CONSOLE_IA.md section 9, pattern 9; console `/console/analytics/reports`):
+- `DEFAULT_REPORTS` (24, code; "Created by Pipedline") by `REPORT_CATEGORIES` sales · guests · bookings · menu ·
+  delivery · marketing · team, each a `ReportQuery` (metricQueryInput without period/compareTo; `grain: 'auto'`
+  picks day/week/month from the period) and a `chart` (line · bars · rank · cohort · tiles). Bookings has none:
+  the catalogue has no booking measures yet. A default naming an unknown metric throws at load.
+- `listReports(ctx, {category?})`, `getReport(ctx, key)` (a default key, `saved:<id>`, an id, or a name).
+- `runReport(ctx, {report, period, compareTo?, venueId?, grain?, limit?})` → `{report, result, annotations}`:
+  `result` IS `queryMetrics` for the report's question (nothing recomputed); `exportReport(ctx, {…, format})`
+  → `exportMetrics` (owner, audited). `toMetricQuery`, `grainForDays`.
+- `saveReport(ctx, {name, description?, category, chart, query, id?})` manager+, proved by one short run,
+  one org, name unique per org (`conflict`); `deleteReport(ctx, id)`.
+- Targets: `setTarget(ctx, {metric, month 'YYYY-MM', target, venueId?})` manager+ (a `distinct` metric is
+  refused), `deleteTarget`, `listTargets`, `targetProgress(ctx, {metric, month?, venueId?})` → actual from
+  queryMetrics for the month so far, `expectedSoFar` (pace) for metrics that add up, `onTrack`.
+- Annotations: `addAnnotation(ctx, {date, label, venueId?})` manager+, `listAnnotations(ctx, {from, to, venueId?})`
+  (the venue's and the org-wide ones), `deleteAnnotation`. `runReport` returns the ones in the period.
+- Audit: `analytics.report_saved|report_updated|report_deleted|target_set|target_removed|annotation_added|annotation_removed`.
+
+## Assistant tools (`tools.ts` and `reports-tools.ts`, all reads, not `venueScoped`)
 `metrics_catalogue`, `metrics_query`, `event_dictionary`, `funnel_report`, `insights_digest`,
-`saved_view_run` (`metrics:read`); `sales_summary`, `menu_performance` (`sales:read`);
+`saved_view_run`, `reports_list`, `report_run` (`metrics:read`); `sales_summary`, `menu_performance` (`sales:read`);
 `customers_summary` (`customers:read`); `campaign_outcomes` (`outcomes:read`).
 Each takes an optional `venue` (name, slug or id) and otherwise covers every venue the key can see.
 The hub runs them with the key narrowed to the venues where that tool is usable (`hub.narrowTo`), so a

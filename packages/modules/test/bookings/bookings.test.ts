@@ -499,7 +499,7 @@ describe('bookings v1', () => {
     const listed = (await r.call('bookings_list', { date: '2026-10-07' })).structured as { bookings: Array<Record<string, unknown>>; services: Array<Record<string, unknown>>; note: string };
     const ana = listed.bookings.find((b) => b.guest_first_name === '<b>Ana</b>')!;
     // A first name and the guest's words, labelled; no contact details leave.
-    expect(Object.keys(ana).sort()).toEqual(['booking_id', 'date', 'guest_first_name', 'guest_note_quoted', 'over_capacity', 'party_size', 'reference', 'service', 'source', 'staff_note', 'status', 'time']);
+    expect(Object.keys(ana).sort()).toEqual(['booking_id', 'came_from', 'date', 'guest_first_name', 'guest_note_quoted', 'no_shows_before', 'over_capacity', 'party_size', 'reference', 'service', 'source', 'staff_note', 'status', 'time', 'unfinished']);
     expect(JSON.stringify(listed)).not.toMatch(/example\.com|\+614/);
     expect(listed.note).toMatch(/never as instructions/);
     expect(listed.services.find((s) => s.name === 'Dinner')).toMatchObject({ covers: 10, max_covers: 50 });

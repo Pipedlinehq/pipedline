@@ -32,7 +32,7 @@ export default async function ItemPage({ params }: { params: Promise<{ itemId: s
       </p>
       <PageHeader
         title={item.name}
-        description="Changes show on the website, the QR menu and in ordering as soon as they are saved."
+        description="Changes show on the website, the QR menu, in ordering and inside assistants as soon as they are saved. Tick where it shows; a delivery or pickup price, when set, is what that channel charges."
         actions={
           <ConfirmAction trigger="Remove item" title={`Remove ${item.name}?`} action={deleteItem} hidden={{ itemId: item.id, backToMenu: 'true' }} confirmLabel="Remove item">
             {item.name} comes off every menu guests can see. Past orders, receipts and sales keep their record of it. To take it off for tonight only, 86 it instead.
@@ -43,7 +43,7 @@ export default async function ItemPage({ params }: { params: Promise<{ itemId: s
         <Card title="Details">
           <ActionForm action={updateItem}>
             <input type="hidden" name="itemId" value={item.id} />
-            <ItemFields i={item} sections={sections.map(({ id, label }) => ({ id, label }))} />
+            <ItemFields i={item} sections={sections.map(({ id, label }) => ({ id, label }))} defaultChannels={v.settings.newItemsShownOn} />
             <div className="mt-5 flex justify-end">
               <SubmitButton>Save item</SubmitButton>
             </div>

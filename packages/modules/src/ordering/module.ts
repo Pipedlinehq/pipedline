@@ -132,6 +132,14 @@ export const orderingConfig = z.object({
     .max(120)
     .default(15)
     .describe('How long an order that has not been paid keeps its pickup slot before it is cancelled, in minutes. Default 15.'),
+  /** When an unpaid checkout with a contact counts as "didn't finish". */
+  abandoned_after_minutes: z
+    .number()
+    .int()
+    .min(1)
+    .max(1440)
+    .default(10)
+    .describe('An order a guest started (with an email or phone) but had not paid after this many minutes is listed under "Didn\'t finish", where staff can send one nudge. Default 10.'),
 });
 export type OrderingConfig = z.infer<typeof orderingConfig>;
 
@@ -275,4 +283,64 @@ export const paymentReconciled = defineEvent({
   module: 'ordering',
   description: 'A card payment whose outcome was never heard was looked up at the processor and settled: charged, or not charged.',
   properties: z.object({ order_id: z.string(), outcome: z.enum(['charged', 'not_charged']) }),
+});
+
+// ── Didn't finish (docs/COMMERCE_ADMIN_PATTERNS.md pattern 7) ──────────────────
+
+export const orderAbandoned = defineEvent({
+  name: 'order.abandoned',
+  module: 'ordering',
+  description: 'A guest started an order and gave a contact but had not paid after the venue\'s "didn\'t finish" threshold. It is listed for staff, who may send one nudge.',
+  properties: z.object({ order_id: z.string(), channel, total_cents: z.number().int(), minutes_since_started: z.number().int() }),
+});
+
+export const orderNudged = defineEvent({
+  name: 'order.nudged',
+  module: 'ordering',
+  description: 'Staff sent the one nudge about an unfinished order: a transactional message to the guest about their own order. `status` is what the outbox did with it.',
+  properties: z.object({ order_id: z.string(), via: z.enum(['email', 'sms']), status: z.enum(['queued', 'suppressed']) }),
+});
+
+export const orderRecovered = defineEvent({
+  name: 'order.recovered',
+  module: 'ordering',
+  description: 'An unfinished order was recovered: the guest paid it after all, or placed and paid a new order at the venue.',
+  properties: z.object({ order_id: z.string(), by: z.enum(['same_order', 'new_order']), recovered_order_id: z.string() }),
+});
+
+export const orderPurged = defineEvent({
+  name: 'order.purged',
+  module: 'ordering',
+  description: 'An unfinished order three months old had the guest\'s details removed and left the "Didn\'t finish" list.',
+  properties: z.object({ order_id: z.string() }),
+});
+
+// ── Phone and function orders (pattern 10) ─────────────────────────────────────
+
+export const orderDrafted = defineEvent({
+  name: 'order.drafted',
+  module: 'ordering',
+  description: 'Staff built an order by hand for a guest who phoned or asked in person, or for a function. Nothing is charged until the guest pays the link or staff mark it paid.',
+  properties: z.object({ order_id: z.string(), channel, total_cents: z.number().int(), item_count: z.number().int(), custom_items: z.number().int(), has_hold: z.boolean() }),
+});
+
+export const payLinkSent = defineEvent({
+  name: 'order.pay_link_sent',
+  module: 'ordering',
+  description: 'Staff sent the guest a link to pay for a phone or function order on the venue\'s own order page.',
+  properties: z.object({ order_id: z.string(), via: z.enum(['email', 'sms']) }),
+});
+
+export const orderMarkedPaid = defineEvent({
+  name: 'order.marked_paid',
+  module: 'ordering',
+  description: 'A manager marked a phone or function order as paid by other means (cash, bank transfer). It enters the sales record and goes to the kitchen like a card payment.',
+  properties: z.object({ order_id: z.string(), method: z.enum(['cash', 'bank', 'other']), total_cents: z.number().int() }),
+});
+
+export const draftExpired = defineEvent({
+  name: 'order.draft_expired',
+  module: 'ordering',
+  description: 'A phone or function order left untouched for a year was cleared.',
+  properties: z.object({ order_id: z.string() }),
 });

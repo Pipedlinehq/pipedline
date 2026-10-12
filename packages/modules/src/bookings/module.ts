@@ -132,6 +132,13 @@ export const bookingsConfig = z.object({
     .max(72)
     .default(24)
     .describe('How long before the booking the reminder goes out, in hours. A booking made later than that gets no reminder.'),
+  request_window_hours: z
+    .number()
+    .int()
+    .min(1)
+    .max(168)
+    .default(24)
+    .describe('A booking request still waiting for the venue\'s yes after this many hours (or when its time arrives, if sooner) is listed under "Didn\'t finish", where staff can send the guest one nudge. Default 24.'),
 });
 export type BookingsConfig = z.infer<typeof bookingsConfig>;
 
@@ -222,4 +229,34 @@ export const bookingCompleted = defineEvent({
   module: 'bookings',
   description: 'Staff marked a booking finished (the party has left).',
   properties: z.object({ booking_id: z.string(), party_size: z.number().int() }),
+});
+
+// ── Didn't finish (docs/COMMERCE_ADMIN_PATTERNS.md pattern 7) ──────────────────
+
+export const bookingAbandoned = defineEvent({
+  name: 'booking.abandoned',
+  module: 'bookings',
+  description: 'A booking request was still waiting for the venue\'s yes when its window ran out (request_window_hours, or its own time). It is listed under "Didn\'t finish".',
+  properties: z.object({ booking_id: z.string(), party_size: z.number().int(), hours_waiting: z.number().int() }),
+});
+
+export const bookingNudged = defineEvent({
+  name: 'booking.nudged',
+  module: 'bookings',
+  description: 'Staff sent the one nudge about an unanswered booking request: a transactional message to the guest about their own request. `status` is what the outbox did with it.',
+  properties: z.object({ booking_id: z.string(), via: z.enum(['email', 'sms']), status: z.enum(['queued', 'suppressed']) }),
+});
+
+export const bookingRecovered = defineEvent({
+  name: 'booking.recovered',
+  module: 'bookings',
+  description: 'An unanswered booking request was confirmed (or seated) after all.',
+  properties: z.object({ booking_id: z.string(), party_size: z.number().int() }),
+});
+
+export const bookingPurged = defineEvent({
+  name: 'booking.purged',
+  module: 'bookings',
+  description: 'An unanswered booking request three months old had the guest\'s details removed and left the "Didn\'t finish" list.',
+  properties: z.object({ booking_id: z.string() }),
 });

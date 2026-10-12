@@ -640,6 +640,7 @@ export const savedViewRunTool = defineTool({
   },
 });
 
+/** The reads declared here; the two report tools are in reports-tools.ts (they import presentResult from this file). */
 export const analyticsTools = [
   metricsCatalogueTool,
   metricsQueryTool,

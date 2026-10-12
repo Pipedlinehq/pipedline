@@ -1,3 +1,5 @@
+import { localParts } from '@ros/core';
+import { menu } from '@ros/modules';
 import { Checkbox, Field, Input, Select, Textarea } from '@/ui';
 
 /** Form fields for the menu editor. The menu service validates every value again. */
@@ -14,7 +16,43 @@ const DAYS = [
 
 export const dollars = (cents: number) => (cents / 100).toFixed(2);
 
-export function MenuFields({ m }: { m?: { name: string; isActive: boolean; availableDays: number[]; availableFrom: string | null; availableTo: string | null; sortOrder: number } }) {
+/** An instant as the venue-local "YYYY-MM-DDTHH:MM" a datetime-local input takes. */
+export function localInput(at: Date | null | undefined, timeZone: string): string {
+  if (!at) return '';
+  const p = localParts(at, timeZone);
+  return `${p.date}T${p.time.slice(0, 5)}`;
+}
+
+/** Go-live and retire times, in the venue's own zone. Shared by menus and sections. */
+function ScheduleFields({ liveFrom, liveUntil, timeZone, what }: { liveFrom: Date | null | undefined; liveUntil: Date | null | undefined; timeZone: string; what: string }) {
+  return (
+    <div className="grid grid-cols-2 gap-3">
+      <Field label="Goes live" hint={`Leave empty for now. ${what} is "Scheduled" until then.`}>
+        <Input name="liveFrom" type="datetime-local" defaultValue={localInput(liveFrom, timeZone)} />
+      </Field>
+      <Field label="Retires" hint="Leave empty for never.">
+        <Input name="liveUntil" type="datetime-local" defaultValue={localInput(liveUntil, timeZone)} />
+      </Field>
+    </div>
+  );
+}
+
+/** The five places an item can show, as checkboxes named `shownOn`. */
+export function ChannelBoxes({ checked, legend, hint }: { checked: readonly menu.MenuChannel[]; legend: string; hint?: string }) {
+  return (
+    <fieldset>
+      <legend className="mb-1 text-sm font-medium text-ink">{legend}</legend>
+      <div className="flex flex-wrap gap-x-5 gap-y-2">
+        {menu.MENU_CHANNELS.map((c) => (
+          <Checkbox key={c} name="shownOn" value={c} label={menu.MENU_CHANNEL_WORDS[c]} defaultChecked={checked.includes(c)} />
+        ))}
+      </div>
+      {hint ? <p className="mt-1 text-xs text-ink-3">{hint}</p> : null}
+    </fieldset>
+  );
+}
+
+export function MenuFields({ m, timeZone }: { m?: { name: string; isActive: boolean; availableDays: number[]; availableFrom: string | null; availableTo: string | null; liveFrom: Date | null; liveUntil: Date | null; sortOrder: number }; timeZone: string }) {
   const days = m?.availableDays ?? [0, 1, 2, 3, 4, 5, 6];
   return (
     <div className="space-y-4">
@@ -37,6 +75,7 @@ export function MenuFields({ m }: { m?: { name: string; isActive: boolean; avail
           <Input name="availableTo" type="time" defaultValue={m?.availableTo?.slice(0, 5) ?? ''} />
         </Field>
       </div>
+      <ScheduleFields liveFrom={m?.liveFrom} liveUntil={m?.liveUntil} timeZone={timeZone} what="The menu" />
       <div className="grid grid-cols-2 items-end gap-3">
         <Field label="Order on the page">
           <Input name="sortOrder" type="number" min={0} defaultValue={m?.sortOrder ?? 0} />
@@ -47,7 +86,15 @@ export function MenuFields({ m }: { m?: { name: string; isActive: boolean; avail
   );
 }
 
-export function SectionFields({ s }: { s?: { name: string; description: string | null; sortOrder: number; isVisible: boolean } }) {
+export function SectionFields({
+  s,
+  timeZone,
+  venueDefault,
+}: {
+  s?: { name: string; description: string | null; sortOrder: number; isVisible: boolean; liveFrom: Date | null; liveUntil: Date | null; shownOn: menu.MenuChannel[] | null };
+  timeZone: string;
+  venueDefault: readonly menu.MenuChannel[];
+}) {
   return (
     <div className="space-y-4">
       <Field label="Name">
@@ -56,6 +103,8 @@ export function SectionFields({ s }: { s?: { name: string; description: string |
       <Field label="Description" hint="Optional. Shown under the section name.">
         <Textarea name="description" maxLength={2000} defaultValue={s?.description ?? ''} />
       </Field>
+      <ScheduleFields liveFrom={s?.liveFrom} liveUntil={s?.liveUntil} timeZone={timeZone} what="The section" />
+      <ChannelBoxes checked={s?.shownOn ?? venueDefault} legend="New items in this section show on" hint="Each item can still be changed on its own. Items already in the section keep their own setting." />
       <div className="grid grid-cols-2 items-end gap-3">
         <Field label="Order on the menu">
           <Input name="sortOrder" type="number" min={0} defaultValue={s?.sortOrder ?? 0} />
@@ -79,13 +128,13 @@ export interface ItemDefaults {
   prepMinutes: number;
   maxPerOrder: number | null;
   isAlcohol: boolean;
-  isVisibleOnline: boolean;
-  isVisibleInVenue: boolean;
+  shownOn: menu.MenuChannel[];
+  channelPrices: Partial<Record<menu.MenuChannel, number>>;
   posCatalogId: string | null;
   sectionId: string;
 }
 
-export function ItemFields({ i, sections }: { i?: ItemDefaults; sections?: Array<{ id: string; label: string }> }) {
+export function ItemFields({ i, sections, defaultChannels }: { i?: ItemDefaults; sections?: Array<{ id: string; label: string }>; defaultChannels: readonly menu.MenuChannel[] }) {
   return (
     <div className="space-y-4">
       <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_9rem]">
@@ -132,6 +181,15 @@ export function ItemFields({ i, sections }: { i?: ItemDefaults; sections?: Array
           <Input name="calories" type="number" min={0} defaultValue={i?.calories ?? ''} />
         </Field>
       </div>
+      <ChannelBoxes checked={i?.shownOn ?? defaultChannels} legend="Where it shows" />
+      <div className="grid grid-cols-2 gap-3">
+        <Field label="Delivery price ($)" hint="Optional. Charged on delivery orders instead of the price above.">
+          <Input name="deliveryPrice" inputMode="decimal" defaultValue={i?.channelPrices.delivery !== undefined ? dollars(i.channelPrices.delivery) : ''} placeholder="Same as price" />
+        </Field>
+        <Field label="Pickup price ($)" hint="Optional. Charged on pickup orders instead of the price above.">
+          <Input name="pickupPrice" inputMode="decimal" defaultValue={i?.channelPrices.pickup !== undefined ? dollars(i.channelPrices.pickup) : ''} placeholder="Same as price" />
+        </Field>
+      </div>
       <div className="grid gap-3 sm:grid-cols-2">
         <Field label="Image address" hint="Optional. A full https:// address.">
           <Input name="imageUrl" type="url" defaultValue={i?.imageUrl ?? ''} />
@@ -140,13 +198,11 @@ export function ItemFields({ i, sections }: { i?: ItemDefaults; sections?: Array
           <Input name="posCatalogId" defaultValue={i?.posCatalogId ?? ''} />
         </Field>
       </div>
-      <Field label="Order in the section">
-        <Input name="sortOrder" type="number" min={0} defaultValue={i?.sortOrder ?? 0} className="max-w-32" />
-      </Field>
-      <div className="flex flex-wrap gap-x-6 gap-y-2">
-        <Checkbox name="isVisibleOnline" label="Shown online" defaultChecked={i?.isVisibleOnline ?? true} />
-        <Checkbox name="isVisibleInVenue" label="Shown on the QR menu" defaultChecked={i?.isVisibleInVenue ?? true} />
-        <Checkbox name="isAlcohol" label="Contains alcohol" defaultChecked={i?.isAlcohol ?? false} />
+      <div className="flex flex-wrap items-end gap-x-6 gap-y-2">
+        <Field label="Order in the section">
+          <Input name="sortOrder" type="number" min={0} defaultValue={i?.sortOrder ?? 0} className="max-w-32" />
+        </Field>
+        <Checkbox name="isAlcohol" label="Contains alcohol" defaultChecked={i?.isAlcohol ?? false} className="pb-2" />
       </div>
     </div>
   );

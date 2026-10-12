@@ -62,6 +62,13 @@ No org-level settings namespace.
 
 No ports or adapters.
 
+## Relation to the menu's own schedules (2026-10-13)
+
+Unchanged by the menu depth pass. A special is still a notice with a date range; it is not a
+menu item, is not on any channel and has no price per channel. A dish that should go live on a
+date and be ordered belongs on a **scheduled menu or section** (`menu` module: `liveFrom` /
+`liveUntil`), not here. Specials stay the right place for "today's soup" board notices.
+
 ## Known gaps
 
 - No page shows it yet. The public menu page (`apps/web`) does not call `getCurrentSpecials`, and

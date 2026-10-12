@@ -4,4 +4,14 @@ export * from './availability';
 export * from './bookings';
 export * from './messages';
 export * from './tools';
+export {
+  type BookingNudgeResult,
+  bookingNudgeInput,
+  checkBookingNudge,
+  listUnfinishedBookings,
+  listUnfinishedBookingsInput,
+  nudgeUnfinishedBooking,
+  purgeUnfinishedBookingsJob,
+  purgeUnfinishedBookingsSchedule,
+} from './unfinished';
 import './hooks';

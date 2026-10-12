@@ -52,7 +52,10 @@ ordering read the same rows, so an 86 in the kitchen is gone from the table's ph
 - Allergen and dietary display is a safety surface. Same rule as the KDS: visible without a tap.
 - Cache the menu on the device after first load so weak reception in a basement still shows it.
   Ordering needs a connection and says so.
-- `is_visible_in_venue` already exists on `menu_items`; QR respects it.
+- `is_visible_in_venue` already exists on `menu_items`; QR respects it. Since 2026-10-13 it is
+  one of five channels (`menu_items.shown_on`, channel `qr`; `getPublicMenu` surface `qr`, the
+  older `in_venue` means the same); a scheduled menu or section is on the table's phone from its
+  go-live instant, and a sold-out dish shows when it is back (`docs/modules/ordering.md` section 1a).
 - Printable code sheets and table talkers generated from brand tokens, per table, in one PDF.
 
 ## 5. Q2 — order and pay

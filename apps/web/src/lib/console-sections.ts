@@ -56,11 +56,16 @@ export async function consoleSections(c: ConsoleContext): Promise<NavSection[]> 
     section('menu', 'Menu', [{ href: '/console/menu', label: 'Menus and items' }, ...(manager ? [{ href: '/console/menu/import', label: 'Menu import' }] : [])], true),
     section('customers', 'Customers', [
       ...(guestFacing ? [{ href: '/console/customers', label: 'Guests' }] : []),
+      ...(manager && on.campaigns ? [{ href: '/console/customers/lists', label: 'Guest lists' }] : []),
       ...(on.loyalty ? [{ href: '/console/loyalty', label: 'Loyalty' }] : []),
       ...(on.reviews ? [{ href: '/console/reviews', label: 'Reviews' }] : []),
     ]),
     section('marketing', 'Marketing', manager ? [...(on.campaigns ? [{ href: '/console/campaigns', label: 'Campaigns' }, { href: '/console/campaigns/flows', label: 'Lifecycle flows' }] : []), { href: '/console/approvals', label: 'Approvals' }] : []),
-    section('offers', 'Offers', [...(on.offers ? [{ href: '/console/offers', label: 'Offers and vouchers' }] : []), ...(on.loyalty && manager ? [{ href: '/console/loyalty/program', label: 'Loyalty rules' }] : [])]),
+    section('offers', 'Offers', [
+      ...(on.offers ? [{ href: '/console/offers', label: 'Offers and vouchers' }] : []),
+      ...(on.offers && manager ? [{ href: '/console/offers/surcharges', label: 'Surcharges' }] : []),
+      ...(on.loyalty && manager ? [{ href: '/console/loyalty/program', label: 'Loyalty rules' }] : []),
+    ]),
     section('website', 'Website', [
       ...(manager && on.website ? [{ href: '/console/website', label: 'Pages and brand' }] : []),
       ...(manager ? [{ href: '/console/hours', label: 'Hours' }] : []),
@@ -68,6 +73,7 @@ export async function consoleSections(c: ConsoleContext): Promise<NavSection[]> 
     ]),
     section('analytics', 'Analytics', [
       { href: '/console/analytics', label: 'Sales' },
+      { href: '/console/analytics/reports', label: 'Reports' },
       { href: '/console/analytics/overview', label: 'Overview' },
       { href: '/console/analytics/menu', label: 'Menu performance' },
       { href: '/console/analytics/customers', label: 'Customer insight' },
@@ -82,7 +88,7 @@ export async function consoleSections(c: ConsoleContext): Promise<NavSection[]> 
     section(
       'settings',
       'Settings',
-      manager ? [{ href: '/console/settings/team', label: 'Team' }, { href: '/console/settings/screens', label: 'Kitchen screens' }, { href: '/console/activity', label: 'Activity' }, ...(c.isOwner ? [{ href: '/console/settings/privacy', label: 'Privacy and records' }] : [])] : [],
+      manager ? [{ href: '/console/settings/team', label: 'Team' }, { href: '/console/settings/notifications', label: 'Notifications' }, { href: '/console/settings/screens', label: 'Kitchen screens' }, { href: '/console/activity', label: 'Activity' }, ...(c.isOwner ? [{ href: '/console/settings/privacy', label: 'Privacy and records' }] : [])] : [],
     ),
   ];
   return sections.filter((s): s is NavSection => s !== null);

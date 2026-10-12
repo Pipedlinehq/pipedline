@@ -1,6 +1,7 @@
 'use server';
 
 import { redirect } from 'next/navigation';
+import { invalid, zonedTimeToUtc } from '@ros/core';
 import { menu } from '@ros/modules';
 import { act, all, bool, bulkAct, cents, int, nullableText, optText, text } from '@/lib/console-actions';
 import type { FormState } from '@/ui/client';
@@ -18,23 +19,62 @@ const tags = (fd: FormData, name: string) =>
     .map((t) => t.trim())
     .filter(Boolean);
 const days = (fd: FormData) => all(fd, 'days').map(Number);
+const isChannel = (v: string): v is menu.MenuChannel => (menu.MENU_CHANNELS as readonly string[]).includes(v);
+const channels = (fd: FormData) => all(fd, 'shownOn').filter(isChannel);
+/** A datetime-local value ("2026-10-10T08:00", venue-local) as the service takes it; empty = null. */
+const localDateTime = (fd: FormData, name: string) => {
+  const v = text(fd, name);
+  return v ? v.slice(0, 16) : null;
+};
 
 // ── 86: kitchen, front of house and managers ────────────────────────────────
 
+/**
+ * The 86 button's choices: until the end of service, until tomorrow, until a time the person
+ * picked (venue-local, turned into an instant here), or until someone puts it back.
+ */
 export async function setAvailability(_: FormState, fd: FormData): Promise<FormState> {
   const available = text(fd, 'available') === 'true';
-  const until = text(fd, 'until');
+  const choice = text(fd, 'until');
   return ok(
-    await act((ctx) => menu.setItemAvailability(ctx, { itemId: text(fd, 'itemId'), available, until: !available && until === 'end_of_service' ? 'end_of_service' : null }), {
-      success: (d) => (d.available ? `${d.name} is back on.` : `${d.name} is 86'd${d.until ? ' until the end of service' : ' until someone puts it back'}.`),
-      revalidate: PATHS,
-    }),
+    await act(
+      async (ctx, c): Promise<menu.ItemAvailability & { words: string }> => {
+        let until: string | null = null;
+        if (!available) {
+          if (choice === 'end_of_service' || choice === 'tomorrow') until = choice;
+          else if (choice === 'at') {
+            const at = localDateTime(fd, 'untilAt');
+            if (!at) throw invalid('Pick the time it comes back.');
+            const [date, time] = at.split('T') as [string, string];
+            until = zonedTimeToUtc(date, time, c.venue.timezone).toISOString();
+          }
+        }
+        const r = await menu.setItemAvailability(ctx, { itemId: text(fd, 'itemId'), available, until });
+        return { ...r, words: menu.backWords(r.until, ctx.now(), c.venue.timezone) };
+      },
+      {
+        success: (d) => (d.available ? `${d.name} is back on.` : `${d.name} is 86'd, ${d.words}.`),
+        revalidate: PATHS,
+      },
+    ),
   );
 }
 
-/** The bulk bar: 86 the selected items until the end of service, or put them back, one by one. */
+/**
+ * The bulk bar: 86 the selected items until the end of service, put them back, or show them on /
+ * hide them from one channel, one by one.
+ */
 export async function bulkAvailability(_: FormState, fd: FormData): Promise<FormState> {
   const what = text(fd, 'action');
+  const choice = text(fd, 'choice');
+  if (what === 'show' || what === 'hide') {
+    if (!isChannel(choice)) return { ok: false, error: 'Pick where to show or hide them.' };
+    const where = menu.MENU_CHANNEL_WORDS[choice];
+    return bulkAct(fd, (ctx, _c, itemId) => menu.setItemChannels(ctx, { itemId, ...(what === 'show' ? { show: [choice] } : { hide: [choice] }) }), {
+      done: (n) => `${n} ${n === 1 ? 'item' : 'items'} now ${what === 'show' ? 'shown on' : 'hidden from'} ${where}.`,
+      revalidate: PATHS,
+    });
+  }
   if (what !== 'off' && what !== 'on') return { ok: false, error: 'That is not something that can be done to items in bulk.' };
   const available = what === 'on';
   return bulkAct(fd, (ctx, _c, itemId) => menu.setItemAvailability(ctx, { itemId, available, until: available ? null : 'end_of_service' }), {
@@ -53,6 +93,13 @@ export async function setModifierAvailability(_: FormState, fd: FormData): Promi
   );
 }
 
+// ── Venue settings: managers ────────────────────────────────────────────────
+
+/** "New items go everywhere" per channel: the venue's default for where a new item shows. */
+export async function updateSettings(_: FormState, fd: FormData): Promise<FormState> {
+  return ok(await act((ctx, c) => menu.updateMenuSettings(ctx, { venueId: c.venue.id, newItemsShownOn: channels(fd) }), { success: 'Saved. New items will show there unless their section or they themselves say otherwise.', revalidate: PATHS }));
+}
+
 // ── Menus and sections: managers ────────────────────────────────────────────
 
 function menuFields(fd: FormData) {
@@ -62,6 +109,8 @@ function menuFields(fd: FormData) {
     availableDays: days(fd),
     availableFrom: nullableText(fd, 'availableFrom'),
     availableTo: nullableText(fd, 'availableTo'),
+    liveFrom: localDateTime(fd, 'liveFrom'),
+    liveUntil: localDateTime(fd, 'liveUntil'),
     sortOrder: int(fd, 'sortOrder') ?? 0,
   };
 }
@@ -78,35 +127,24 @@ export async function deleteMenu(_: FormState, fd: FormData): Promise<FormState>
   return ok(await act((ctx) => menu.deleteMenu(ctx, text(fd, 'menuId')), { success: 'Menu removed.', revalidate: PATHS }));
 }
 
+function sectionFields(fd: FormData) {
+  return {
+    name: text(fd, 'name'),
+    description: nullableText(fd, 'description'),
+    sortOrder: int(fd, 'sortOrder') ?? 0,
+    isVisible: bool(fd, 'isVisible'),
+    liveFrom: localDateTime(fd, 'liveFrom'),
+    liveUntil: localDateTime(fd, 'liveUntil'),
+    shownOn: channels(fd),
+  };
+}
+
 export async function createSection(_: FormState, fd: FormData): Promise<FormState> {
-  return ok(
-    await act(
-      (ctx) =>
-        menu.createSection(ctx, {
-          menuId: text(fd, 'menuId'),
-          name: text(fd, 'name'),
-          description: nullableText(fd, 'description'),
-          sortOrder: int(fd, 'sortOrder') ?? 0,
-          isVisible: bool(fd, 'isVisible'),
-        }),
-      { success: (s) => `${s.name} added.`, revalidate: PATHS },
-    ),
-  );
+  return ok(await act((ctx) => menu.createSection(ctx, { menuId: text(fd, 'menuId'), ...sectionFields(fd) }), { success: (s) => `${s.name} added.`, revalidate: PATHS }));
 }
 
 export async function updateSection(_: FormState, fd: FormData): Promise<FormState> {
-  return ok(
-    await act(
-      (ctx) =>
-        menu.updateSection(ctx, text(fd, 'sectionId'), {
-          name: text(fd, 'name'),
-          description: nullableText(fd, 'description'),
-          sortOrder: int(fd, 'sortOrder') ?? 0,
-          isVisible: bool(fd, 'isVisible'),
-        }),
-      { success: 'Section saved.', revalidate: PATHS },
-    ),
-  );
+  return ok(await act((ctx) => menu.updateSection(ctx, text(fd, 'sectionId'), sectionFields(fd)), { success: 'Section saved.', revalidate: PATHS }));
 }
 
 export async function deleteSection(_: FormState, fd: FormData): Promise<FormState> {
@@ -114,6 +152,8 @@ export async function deleteSection(_: FormState, fd: FormData): Promise<FormSta
 }
 
 // ── Items: managers ─────────────────────────────────────────────────────────
+
+const PRICE_WORDS = 'Give a price in dollars, such as 24.50.';
 
 function itemFields(fd: FormData) {
   const price = cents(fd, 'price');
@@ -130,19 +170,29 @@ function itemFields(fd: FormData) {
     prepMinutes: int(fd, 'prepMinutes') ?? 10,
     maxPerOrder: int(fd, 'maxPerOrder') ?? null,
     isAlcohol: bool(fd, 'isAlcohol'),
-    isVisibleOnline: bool(fd, 'isVisibleOnline'),
-    isVisibleInVenue: bool(fd, 'isVisibleInVenue'),
+    shownOn: channels(fd),
+    // An empty price box takes that channel's price off; the item's own price applies there.
+    channelPrices: { delivery: cents(fd, 'deliveryPrice') ?? null, pickup: cents(fd, 'pickupPrice') ?? null },
     posCatalogId: nullableText(fd, 'posCatalogId'),
   };
 }
 
+function badPrice(fd: FormData): string | null {
+  if (Number.isNaN(cents(fd, 'price') ?? Number.NaN)) return PRICE_WORDS;
+  if (Number.isNaN(cents(fd, 'deliveryPrice') ?? 0)) return `Delivery price: ${PRICE_WORDS}`;
+  if (Number.isNaN(cents(fd, 'pickupPrice') ?? 0)) return `Pickup price: ${PRICE_WORDS}`;
+  return null;
+}
+
 export async function createItem(_: FormState, fd: FormData): Promise<FormState> {
-  if (Number.isNaN(cents(fd, 'price') ?? Number.NaN)) return { ok: false, error: 'Give a price in dollars, such as 24.50.' };
+  const bad = badPrice(fd);
+  if (bad) return { ok: false, error: bad };
   return ok(await act((ctx) => menu.createItem(ctx, { sectionId: text(fd, 'sectionId'), ...itemFields(fd) }), { success: (i) => `${i.name} added.`, revalidate: PATHS }));
 }
 
 export async function updateItem(_: FormState, fd: FormData): Promise<FormState> {
-  if (Number.isNaN(cents(fd, 'price') ?? Number.NaN)) return { ok: false, error: 'Give a price in dollars, such as 24.50.' };
+  const bad = badPrice(fd);
+  if (bad) return { ok: false, error: bad };
   const sectionId = optText(fd, 'sectionId');
   return ok(
     await act((ctx) => menu.updateItem(ctx, text(fd, 'itemId'), { ...itemFields(fd), ...(sectionId ? { sectionId } : {}) }), {
@@ -203,7 +253,7 @@ function modifierFields(fd: FormData) {
 }
 
 export async function createModifier(_: FormState, fd: FormData): Promise<FormState> {
-  if (Number.isNaN(cents(fd, 'priceDelta') ?? 0)) return { ok: false, error: 'Give the price change in dollars, such as 2.50 or -1.'};
+  if (Number.isNaN(cents(fd, 'priceDelta') ?? 0)) return { ok: false, error: 'Give the price change in dollars, such as 2.50 or -1.' };
   const groupId = text(fd, 'groupId');
   return ok(await act((ctx) => menu.createModifier(ctx, { groupId, ...modifierFields(fd) }), { success: (m) => `${m.name} added.`, revalidate: ['/console/menu', `/console/menu/groups/${groupId}`] }));
 }

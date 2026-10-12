@@ -17,7 +17,7 @@ export const commsModule = defineModule({
     writes: ['messages sent and whether they were delivered, opened or bounced', 'opt-outs'],
     consent: 'Marketing goes only to guests who said yes, and every marketing message carries a way to opt out. Texts are never sent in the quiet hours.',
   },
-  tables: ['messages', 'message_events', 'sending_identities', 'suppressions', 'templates', 'esp_sync_state', 'esp_sync_profiles', 'ad_conversions'],
+  tables: ['messages', 'message_events', 'sending_identities', 'suppressions', 'templates', 'esp_sync_state', 'esp_sync_profiles', 'ad_conversions', 'alert_rules', 'alert_cursors'],
   configSchema: z.object({}),
   configVersion: 1,
   defaultConfig: {},

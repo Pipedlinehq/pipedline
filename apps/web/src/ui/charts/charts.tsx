@@ -150,6 +150,12 @@ export function ChartFrame({
   );
 }
 
+/** A mark on one x position ("Menu change", "Public holiday"): a dashed rule, its words in the tooltip and under the chart. */
+export interface ChartAnnotation {
+  index: number;
+  label: string;
+}
+
 interface CartesianProps {
   title: string;
   subtitle?: string;
@@ -161,6 +167,7 @@ interface CartesianProps {
   currency?: string;
   height?: number;
   note?: string | null;
+  annotations?: ChartAnnotation[];
 }
 
 const M = { top: 8, right: 12, bottom: 24, left: 52 };
@@ -212,11 +219,13 @@ function xTickIndexes(n: number, plotWidth: number): number[] {
 }
 
 /** Change over time. One axis; a second measure on another scale gets its own chart. */
-export function LineChart({ title, subtitle, x, xLabel = 'Date', series, format = 'number', currency = 'AUD', height = 240, note }: CartesianProps) {
+export function LineChart({ title, subtitle, x, xLabel = 'Date', series, format = 'number', currency = 'AUD', height = 240, note, annotations = [] }: CartesianProps) {
   const [ref, width] = useWidth();
   const [hover, setHover] = useState<number | null>(null);
   const plotW = width - M.left - M.right;
   const plotH = height - M.top - M.bottom;
+  const marks = annotations.filter((a) => a.index >= 0 && a.index < x.length);
+  const marksAt = (i: number) => marks.filter((a) => a.index === i).map((a) => a.label);
   const maxV = Math.max(0, ...series.flatMap((s) => s.values.map((v) => v ?? 0)));
   const scale = useMemo(() => niceScale(maxV), [maxV]);
   const px = (i: number) => M.left + (x.length <= 1 ? plotW / 2 : (i / (x.length - 1)) * plotW);
@@ -273,6 +282,12 @@ export function LineChart({ title, subtitle, x, xLabel = 'Date', series, format 
                   {x[i]}
                 </text>
               ))}
+              {marks.map((a, k) => (
+                <g key={`${a.index}-${k}`} aria-label={`${x[a.index]}: ${a.label}`}>
+                  <line x1={px(a.index)} x2={px(a.index)} y1={M.top} y2={M.top + plotH} stroke="var(--color-ink-3)" strokeWidth={1} strokeDasharray="3 3" />
+                  <circle cx={px(a.index)} cy={M.top + 4} r={3.5} fill="var(--color-surface)" stroke="var(--color-ink-3)" strokeWidth={1.5} />
+                </g>
+              ))}
               {single && series[0] ? (
                 <path
                   d={`${path(series[0].values)}L${px(x.length - 1).toFixed(1)},${py(0)}L${px(0).toFixed(1)},${py(0)}Z`}
@@ -309,13 +324,23 @@ export function LineChart({ title, subtitle, x, xLabel = 'Date', series, format 
                 left={px(hover)}
                 top={M.top}
                 width={width}
-                title={x[hover] ?? ''}
+                title={marksAt(hover).length ? `${x[hover] ?? ''} · ${marksAt(hover).join(', ')}` : (x[hover] ?? '')}
                 rows={series.map((s, i) => ({ label: s.label, value: formatValue(s.values[hover], format, currency, true), colour: colourOf(s, i) }))}
               />
             ) : null}
           </>
         )}
       </div>
+      {marks.length ? (
+        <ul className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-ink-2" aria-label="Marked dates">
+          {marks.map((a, k) => (
+            <li key={`${a.index}-${k}`} className="flex items-center gap-1.5">
+              <span aria-hidden className="inline-block size-2 rounded-full border border-ink-3 bg-surface" />
+              {x[a.index]}: {a.label}
+            </li>
+          ))}
+        </ul>
+      ) : null}
     </ChartFrame>
   );
 }

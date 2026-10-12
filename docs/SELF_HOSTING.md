@@ -448,6 +448,13 @@ The first real run of each is yours. `docs/GOING_LIVE.md` has the order to do it
 
 ## 10. Upgrading and backup
 
+**Deploying the web app and the worker together.** The web app applies pending migrations when
+it starts. The worker will not run against a database with a migration pending; since 13 October
+2026 it waits for the web app to apply them (up to `ROS_MIGRATION_WAIT_SECONDS`, default 600)
+before giving up, so both can deploy at the same time. Before that date the worker exited at
+once and had to be redeployed after the web app.
+
+
 ### Upgrading
 
 ```bash

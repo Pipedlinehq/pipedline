@@ -16,6 +16,7 @@ import {
   listBookings,
 } from './bookings';
 import { partyLine, whenLine } from './messages';
+import { checkBookingNudge, nudgeUnfinishedBooking } from './unfinished';
 
 /**
  * The venue's own assistant. Each tool is pinned to the service function the console calls, so
@@ -46,7 +47,16 @@ const listedShape = z.object({
   guest_note_quoted: z.string().nullable(),
   staff_note: z.string().nullable(),
   over_capacity: z.boolean(),
+  came_from: z.string(),
+  /** How many of this guest's past bookings ended as no-shows. */
+  no_shows_before: z.number().int(),
+  unfinished: z
+    .object({ since: z.string(), nudge: z.string(), recovered: z.boolean() })
+    .nullable()
+    .describe('Set for a request the venue did not answer in its window: when it was counted as unfinished, whether the one nudge went ("not sent", "sent", "suppressed"), and whether it was confirmed after all'),
 });
+
+const CAME_FROM: Record<string, string> = { web: 'Website', assistant: 'Inside assistants', phone: 'Phone', staff: 'Staff' };
 
 const changedShape = z.object({
   booking_id: z.string(),
@@ -88,6 +98,9 @@ const listed = (b: BookingView): z.infer<typeof listedShape> => ({
   guest_note_quoted: b.guestNote ? b.guestNote.slice(0, NOTE_CAP) : null,
   staff_note: b.staffNote,
   over_capacity: b.overCapacity,
+  came_from: CAME_FROM[b.source] ?? b.source,
+  no_shows_before: b.noShowCount,
+  unfinished: b.abandonedAt ? { since: b.abandonedAt.toISOString(), nudge: b.nudgeSentAt ? (b.nudgeStatus?.startsWith('suppressed') ? 'suppressed' : 'sent') : 'not sent', recovered: b.recoveredAt !== null } : null,
 });
 
 const changed = (b: BookingView): z.infer<typeof changedShape> => ({
@@ -330,5 +343,33 @@ export const bookingAddTool = defineTool({
   },
 });
 
-export const bookingsTools = [bookingsTodayTool, bookingsListTool, bookingAvailabilityTool, bookingConfirmTool, bookingDeclineTool, bookingCancelTool, bookingAddTool];
+export const bookingNudgeTool = defineTool({
+  name: 'booking_nudge',
+  module: 'bookings',
+  title: 'Nudge a guest about an unanswered booking request',
+  description:
+    'Send the one message about a booking request the venue did not answer in its window (bookings_list rows with "unfinished" set): the request is still waiting, how to reach the venue, and the guest\'s own link to cancel. It is about their own request, not an offer; it goes once, never twice. Confirming or declining the request is the better answer when you can.',
+  effect: 'write',
+  sensitive: true,
+  scope: 'bookings:write',
+  minRole: 'host',
+  venueScoped: true,
+  input: z.object({ booking: bookingArg }),
+  output: changedShape.extend({ via: z.enum(['email', 'sms']), nudge_status: z.enum(['queued', 'suppressed']) }),
+  async propose({ ctx, venueId }, input) {
+    const found = await lookup(ctx, venueId!, input.booking);
+    const b = await checkBookingNudge(ctx, found.id);
+    const venue = await getVenue(ctx, b.venueId);
+    const via = b.guestEmail ? 'email' : 'text message';
+    return {
+      question: `Send the guest one ${via} about booking request ${describe(b, venue.timezone)} at ${venue.name}, which has been waiting for a yes since ${whenLine(b.createdAt, venue.timezone)}? It says the request is still waiting and how to cancel. It is the only nudge they will get.`,
+      commit: async () => {
+        const r = await nudgeUnfinishedBooking(ctx, { bookingId: b.id });
+        return { ...changed(r.booking), via: r.via, nudge_status: r.status };
+      },
+    };
+  },
+});
+
+export const bookingsTools = [bookingsTodayTool, bookingsListTool, bookingAvailabilityTool, bookingConfirmTool, bookingDeclineTool, bookingCancelTool, bookingAddTool, bookingNudgeTool];
 

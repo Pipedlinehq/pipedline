@@ -8,7 +8,8 @@ syncs: the venue's own email platform (ESP) and ad-platform purchase conversions
 `dependsOn: ['identity']`.
 
 Tables (`commsModule.tables`): `messages`, `message_events`, `sending_identities`,
-`suppressions`, `templates`, `esp_sync_state`, `esp_sync_profiles`, `ad_conversions`.
+`suppressions`, `templates`, `esp_sync_state`, `esp_sync_profiles`, `ad_conversions`, and since the
+console depth pass (wave 2, pattern 13; migration 0801) `alert_rules`, `alert_cursors`.
 
 ## Public functions
 
@@ -26,6 +27,27 @@ Console:
 - `listSendingIdentities(ctx)` — manager. `addSendingIdentity(ctx, input, provider)` — owner; starts `pending`.
 - `connectEmailPlatform(ctx, input)` / `disconnectEmailPlatform(ctx, id)` — owner. `emailPlatformStatus(ctx)`, `requestEmailPlatformSync(ctx, id)` — manager.
 - `connectAdsAccount(ctx, input)` — owner. `adsConversionStatus(ctx, { venueId? })` — manager.
+
+Alerts to the team (`alerts.ts`; docs/CONSOLE_IA.md section 9, pattern 13; console `/console/settings/notifications`):
+- `ALERT_EVENTS` / `ALERT_EVENT_DEFS`: `order.new` (from `order.paid`, urgent), `booking.new` (`booking.requested`),
+  `booking.cancelled`, `review.posted` (`review.received`), `assistant.needs_yes` (`approval.requested`),
+  `delivery.problem` (`delivery.failed`, urgent), `digest.daily`, `digest.weekly`. Channels email · sms. A recipient is
+  `{kind:'staff', staffId}` or `{kind:'role', role}` (everyone holding the role at the venue); never a guest.
+- `listAlertRules(ctx, {venueId})` → `AlertCatalogue` (events, rules, people and roles at the venue, settings); `setAlertRule(ctx,
+  {venueId, event, channel, recipient, enabled})` upsert (a text to someone with no phone is `invalid`); `removeAlertRule(ctx, id)`;
+  `sendTestAlert(ctx, {ruleId})` one message through one rule, now. All manager+ at the venue; another org's id is not found.
+- `getAlertSettings` / `setAlertSettings(ctx, {quietHours|null, dailyDigestHour})` — org settings `alerts` (default 22:00–07:00, 7).
+  `inQuietHours`, `quietHoursEnd`.
+- `notifyTeam(ctx, {venueId, event, title, body, link, idempotencyKey})` → `{queued, skipped, heldUntil, messageIds}`: one
+  transactional `alerts.team` message per person and channel through `queueMessage`, keyed `<alert>:<rule>:<staff>` (a repeat
+  queues nothing); an event that is not urgent inside quiet hours is queued with `sendAt` = their end. No role check (dispatcher).
+- `alertRecipients(ctx, event, venueIds)` — who the rules name, for the digests (the hub's `weekly_digest` agent sends to the
+  `digest.weekly` recipients, else the owners).
+- `alertFor(event, consoleBase)` words an activity-stream row (reference-free: counts, amounts, channel; never guest text).
+  `dispatchAlerts(app, orgId)` reads `events` from `alert_cursors.read_through` (first run: 15 minutes back) for venues with
+  enabled rules, 500 at a time, and moves the watermark. `sendDailyDigests(app, orgId)` sends `computeDigest({period:'day'})`'s
+  sentence to the `digest.daily` recipients once per venue per day from the digest hour.
+- Audit: `alerts.rule_set|rule_removed|test_sent`.
 
 Platform / internal:
 - `setSendingIdentityStatus(ctx, id, status)` — internal principals only (never an owner).
@@ -48,11 +70,12 @@ Venue config is empty. Org settings:
 
 ## Jobs, schedules, events, templates, tools
 
-- Jobs: `comms.send` (6 attempts; defers for quiet hours and daily cap), `comms.esp_sync`, `comms.esp_sync_all`, `comms.ad_conversion` (6 attempts; re-checks consent and refund before sending).
-- Schedule: `comms.esp_sync`, every 15 minutes, per org with a live ESP connection.
+- Jobs: `comms.send` (6 attempts; defers for quiet hours and daily cap), `comms.esp_sync`, `comms.esp_sync_all`, `comms.ad_conversion` (6 attempts; re-checks consent and refund before sending), `alerts.dispatch`, `alerts.daily_digest`.
+- Schedules: `comms.esp_sync`, every 15 minutes, per org with a live ESP connection; `alerts.dispatch` every 5 minutes and `alerts.daily_digest` hourly, per org with an enabled rule.
 - Events: `message.sent`, `message.delivered`, `message.opened`, `message.clicked`, `message.bounced`, `message.unsubscribed`, `message.suppressed`, `email_platform.synced`, `ad_conversion.sent`.
-- Template: `generic.notice` (email, transactional).
-- Plugs: `sim-esp`, `klaviyo`, `sim-ads`, `meta-capi`. No tools.
+- Templates: `generic.notice` (email, transactional); `alerts.team` (email and sms, transactional: `{title, body, link}`).
+- Plugs: `sim-esp`, `klaviyo`, `sim-ads`, `meta-capi`.
+- Tools (`alert-tools.ts`, `venueScoped`, manager): `alerts_summary` (read, `alerts:read`), `alert_set` (write, `alerts:write`; a staff recipient is named by their name on the team page; propose/commit over `setAlertRule`).
 
 ## Simulated vs real
 
@@ -66,3 +89,4 @@ Venue config is empty. Org settings:
 - Nothing in `apps/` calls `handleMessageWebhook` (no provider webhook route yet).
 - `replyToEmail` is in the settings schema but the send path does not use it.
 - Marketing with no verified sending identity fails the message (`no_verified_sending_identity`); verification depends on provisioning calling `setSendingIdentityStatus`.
+- Alerts have no kitchen-screen channel: a paired screen already shows every new order as a ticket, so a second route would duplicate it. Alerts are raised from the activity stream on a 5-minute schedule, not in the transaction that recorded the event; a venue sees an alert up to five minutes after the fact.

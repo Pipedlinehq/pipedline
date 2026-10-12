@@ -162,7 +162,7 @@ export const hubModule = defineModule({
   },
   // What an assistant may see and do is decided here, so it is never an assistant that decides it.
   assistantConfigurable: false,
-  tables: ['agent_keys', 'agent_calls', 'agent_confirmations', 'plug_reviews', 'agent_runs', 'agent_oauth_clients', 'agent_oauth_codes', 'agent_oauth_tokens', 'llm_usage'],
+  tables: ['agent_keys', 'agent_calls', 'agent_confirmations', 'plug_reviews', 'agent_runs', 'agent_oauth_clients', 'agent_oauth_codes', 'agent_oauth_tokens', 'llm_usage', 'home_dismissals', 'home_suggestion_decisions'],
   configSchema: hubConfig,
   configVersion: 1,
   defaultConfig: hubConfig.parse({}),

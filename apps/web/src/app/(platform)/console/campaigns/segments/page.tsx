@@ -19,8 +19,17 @@ export default async function SegmentsPage({ searchParams }: { searchParams: Pro
       c={c}
       current="/console/campaigns/segments"
       title="Segments"
-      description="Groups of guests, defined by rules over what they have ordered and agreed to. Shared across the organisation. A segment is only ever counted here, never listed."
-      actions={manager ? <LinkButton href="/console/campaigns/segments/new" variant="primary">New segment</LinkButton> : undefined}
+      description="Groups of guests, defined by rules over what they have ordered and agreed to. Shared across the organisation. The same groups are the guest lists under Customers, where a list is written in plain words and shows who is in it."
+      actions={
+        manager ? (
+          <>
+            <LinkButton href="/console/customers/lists">Guest lists</LinkButton>
+            <LinkButton href="/console/campaigns/segments/new" variant="primary">
+              New segment
+            </LinkButton>
+          </>
+        ) : undefined
+      }
     >
       {deleted ? (
         <div className="mb-4">

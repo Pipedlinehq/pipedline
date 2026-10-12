@@ -238,7 +238,7 @@ describe('campaigns: one-off campaigns', () => {
     for (const org of [diner(), group()]) {
       const on = await t.db.selectFrom('venue_modules').select('venue_id').where('org_id', '=', org.orgId).where('module_key', '=', 'campaigns').where('enabled', '=', true).execute();
       expect(on).toHaveLength(Object.keys(org.venues).length);
-      expect((await t.db.selectFrom('segments').select('id').where('org_id', '=', org.orgId).where('is_system', '=', true).execute()).length).toBe(6);
+      expect((await t.db.selectFrom('segments').select('id').where('org_id', '=', org.orgId).where('is_system', '=', true).execute()).length).toBe(5);
       const runs = await t.db.selectFrom('agent_runs').select(['agent_key', 'mode', 'trigger']).where('org_id', '=', org.orgId).where('trigger', '=', 'fixture').execute();
       expect(runs.filter((r) => r.agent_key === 'flow_winback').length).toBe(3 * Object.keys(org.venues).length);
       expect(runs.every((r) => r.mode === 'shadow')).toBe(true);

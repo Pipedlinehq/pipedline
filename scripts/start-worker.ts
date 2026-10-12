@@ -14,9 +14,29 @@ import { checkDeployment, formatDeploymentCheck } from '../packages/runtime/src/
 import { inspectDatabase } from './db-migrate';
 
 /** Refuse to start on a configuration or database the app cannot run with. Exits the process. */
+/**
+ * How long to wait for another process (the web app runs `pnpm db:migrate` on start) to apply
+ * pending migrations before giving up. The web and the worker deploy together; without this the
+ * worker lost the race and crash-looped until the migration landed.
+ */
+const MIGRATION_WAIT_MS = Number(process.env.ROS_MIGRATION_WAIT_SECONDS ?? 600) * 1000;
+const isPendingMigration = (problem: string) => /not applied yet/i.test(problem);
+
 export async function preflight(what: string): Promise<void> {
   const check = checkDeployment(process.env);
-  if (!check.errors.length) check.errors.push(...(await inspectDatabase(process.env.DATABASE_URL!.trim())).problems);
+  if (!check.errors.length) {
+    const deadline = Date.now() + MIGRATION_WAIT_MS;
+    let problems = (await inspectDatabase(process.env.DATABASE_URL!.trim())).problems;
+    let waited = false;
+    while (problems.length && problems.every(isPendingMigration) && Date.now() < deadline) {
+      if (!waited) console.log(`Waiting for pending migrations to be applied by the web app (up to ${MIGRATION_WAIT_MS / 1000}s)…`);
+      waited = true;
+      await new Promise((r) => setTimeout(r, 10_000));
+      problems = (await inspectDatabase(process.env.DATABASE_URL!.trim())).problems;
+    }
+    if (waited && !problems.length) console.log('Migrations are in place.');
+    check.errors.push(...problems);
+  }
   if (check.errors.length) {
     console.error(`The ${what} was not started.\n`);
     console.error(formatDeploymentCheck({ ...check, summary: [] }));

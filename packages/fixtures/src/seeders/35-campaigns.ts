@@ -168,7 +168,7 @@ async function pendingCampaign(app: App, org: FixtureOrg, opts: SeedOptions): Pr
   const manager = await org.as('manager');
   const venueId = org.venues.cbd!.id;
   await app.tenant(org.orgId, manager, async (ctx) => {
-    const lapsed = (await campaigns.listSegments(ctx)).find((s) => s.name === 'Lapsed 60+')!;
+    const lapsed = (await campaigns.listSegments(ctx)).find((s) => s.name === 'Lapsed 60+ days')!;
     const c = await campaigns.draftCampaign(ctx, {
       venueId,
       name: 'Winter menu: come back to the CBD',

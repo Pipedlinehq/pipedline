@@ -22,7 +22,7 @@ test `tests/e2e/15-site-assistant-cart.e2e.ts`. No migration: the module owns no
 - **Tools** (snake_case inputs, every argument described, outputs are zod allowlists):
   `find_venue` (name, suburb, postcode or cuisine; every word must match), `venue_info`
   (address, phone, website, cuisine, price band, seven days of hours, open now, what is
-  offered, the venue's note), `menu_read` (`getPublicMenu` surface `online`, item and option
+  offered, the venue's note), `menu_read` (`getPublicMenu` surface `assistants` since the menu depth pass of 2026-10-13: an item hidden from "Inside assistants" is left out; before that, surface `online`; item and option
   ids, prices in cents, dietary, allergens, sold out, `alcoholic`, `orderable_here`),
   `booking_times`, `booking_request`, `pickup_times`, `order_start`.
 - **Two-step confirmation for an anonymous caller**: the first call of `booking_request` or
@@ -102,7 +102,7 @@ callers (a short-lived signed proposal, no staff role).
 |---|---|---|
 | `find_venue` | Venues on Pipedline matching a name, suburb or cuisine | `tenancy` venues with the plugin on and status live |
 | `venue_info` | Address, phone, today's hours, cuisine, price band, booking and ordering availability | `tenancy`, trading hours, hour exceptions |
-| `menu_read` | The menu being served at a time, with prices, dietary tags, allergens, sold-out flags; alcoholic items marked and never orderable here | `menu.getPublicMenu` (surface `online`) |
+| `menu_read` | The menu being served at a time, with prices, dietary tags, allergens, sold-out flags; alcoholic items marked and never orderable here | `menu.getPublicMenu` (surface `assistants`: what the venue shows "Inside assistants", at that channel's price) |
 | `booking_times` | Bookable times for a date and party size | `bookings.getBookingAvailability` |
 | `booking_request` | Request a table; returns the reference and what happens next | `bookings.requestBooking` |
 | `pickup_times` | Pickup slots for a date | `ordering.getPickupSlots` |

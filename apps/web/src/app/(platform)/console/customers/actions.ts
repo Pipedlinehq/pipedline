@@ -18,6 +18,8 @@ export async function saveCustomer(_prev: FormState, fd: FormData): Promise<Form
         firstName: nullableText(fd, 'firstName'),
         lastName: nullableText(fd, 'lastName'),
         birthday,
+        suburb: nullableText(fd, 'suburb'),
+        postcode: nullableText(fd, 'postcode'),
         allergyNotes: nullableText(fd, 'allergyNotes'),
         notes: nullableText(fd, 'notes'),
       }),

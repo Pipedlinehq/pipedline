@@ -1,18 +1,19 @@
 import Link from 'next/link';
 import { GUEST_FACING_ROLES, localDate, zonedTimeToUtc } from '@ros/core';
-import { events, identity } from '@ros/modules';
+import { campaigns, events, identity } from '@ros/modules';
 import { atLeast, getConsole } from '@/lib/console';
+import { moduleOn } from '@/lib/console-modules';
 import { read } from '@/lib/console-read';
 import { resolveView, type ViewSpec } from '@/lib/console-views';
 import { app } from '@/lib/runtime';
 import { NotForYourRole, ReadError } from '@/components/console/states';
 import { IndexViews } from '@/components/console/views';
-import { Card, EmptyState, FormMessage, PageHeader, Table, Td, Th, dateTime } from '@/ui';
+import { Card, EmptyState, FormMessage, LinkButton, PageHeader, Table, Td, Th, dateTime } from '@/ui';
 import { deleteView, renameView, saveView } from '../views-actions';
 
 export const metadata = { title: 'Customers · Pipedline' };
 
-const SPEC: ViewSpec = {
+const BASE_SPEC: ViewSpec = {
   page: 'customers',
   path: '/console/customers',
   // Lands on All: finding one guest is the commonest reason to open the page, and a search
@@ -61,10 +62,11 @@ const SPEC: ViewSpec = {
 };
 
 /**
- * Customers (docs/CONSOLE_IA.md section 9, wave 1): guests as a list with saved views (regulars,
- * new this month, said yes to email, lapsed) and a search. Guest records are for staff who deal
- * with guests; the service refuses kitchen and read-only roles. Visits are counted at the venue
- * the console is looking at.
+ * Customers (docs/CONSOLE_IA.md section 9, wave 1 and pattern 5): guests as a list with saved
+ * views (regulars, new this month, said yes to email, lapsed) and a search, plus "In the list"
+ * to show the guests of any guest list, so a saved view can be a list. Guest records are for
+ * staff who deal with guests; the service refuses kitchen and read-only roles. Visits are
+ * counted at the venue the console is looking at.
  */
 export default async function CustomersPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const raw = await searchParams;
@@ -73,6 +75,13 @@ export default async function CustomersPage({ searchParams }: { searchParams: Pr
   if (!roles.some((r) => atLeast(r, 'manager') || GUEST_FACING_ROLES.includes(r))) {
     return <NotForYourRole title="Customers">Guest details are shown to front-of-house staff and managers. The numbers about customers are in Analytics.</NotForYourRole>;
   }
+  const manager = atLeast(c.role, 'manager');
+  // Guest lists live with campaigns; the filter is offered when there are any to offer.
+  const lists = (await moduleOn('campaigns')) ? await read((ctx) => campaigns.listSegments(ctx)) : null;
+  const queryLists = lists?.ok ? lists.data.filter((s) => s.query) : [];
+  const SPEC: ViewSpec = queryLists.length
+    ? { ...BASE_SPEC, fields: [...BASE_SPEC.fields, { key: 'list', label: 'In the list', kind: 'select', options: queryLists.map((s) => ({ value: s.id, label: s.name })) }] }
+    : BASE_SPEC;
   // A plain ?q= (the old search box, a link from elsewhere) is a search over everyone.
   const sp = raw.q && raw.f !== '1' ? { ...raw, f: '1', view: 'all' } : raw;
   const saved = await read((ctx) => events.listConsoleViews(ctx, { venueId: c.venue.id, page: 'customers' }));
@@ -81,6 +90,7 @@ export default async function CustomersPage({ searchParams }: { searchParams: Pr
   const tz = c.venue.timezone;
   const now = app().clock();
   const since = f.since === 'month' ? zonedTimeToUtc(`${localDate(now, tz).slice(0, 7)}-01`, '00:00', tz) : f.since === '30d' ? new Date(now.getTime() - 30 * 86_400_000) : f.since === '90d' ? new Date(now.getTime() - 90 * 86_400_000) : undefined;
+  const list = f.list ? queryLists.find((s) => s.id === f.list) : undefined;
   const r = await read((ctx) =>
     identity.listCustomers(ctx, {
       venueId: c.venue.id,
@@ -89,19 +99,24 @@ export default async function CustomersPage({ searchParams }: { searchParams: Pr
       consent: (f.consent as 'marketing_email') || undefined,
       regular: f.visits === 'regular' ? { minVisits: 3, withinDays: 90 } : undefined,
       lapsedDays: f.visits === 'lapsed60' ? 60 : f.visits === 'lapsed90' ? 90 : undefined,
+      query: list?.query ?? undefined,
       limit: 100,
     }),
   );
 
   return (
     <>
-      <PageHeader title="Customers" description={`Guests of ${c.venue.name}: who comes back, who is new, who said yes to hearing from you, and who has not been in for a while.`} />
+      <PageHeader
+        title="Customers"
+        description={`Guests of ${c.venue.name}: who comes back, who is new, who said yes to hearing from you, and who has not been in for a while.`}
+        actions={manager && lists ? <LinkButton href="/console/customers/lists">Guest lists</LinkButton> : undefined}
+      />
       {raw.erased ? (
         <div className="mb-4">
           <FormMessage tone="success">The guest was erased. Their sales stay in the ledger with no one attached.</FormMessage>
         </div>
       ) : null}
-      <IndexViews page="customers" path="/console/customers" resolved={resolved} fields={SPEC.fields} canSave saveAction={saveView} renameAction={renameView} deleteAction={deleteView} />
+      <IndexViews page="customers" path="/console/customers" resolved={resolved} fields={SPEC.fields} canSave saveAction={saveView} renameAction={renameView} deleteAction={deleteView} aside={list ? `${list.name}: ${list.query}` : undefined} />
       {!r.ok ? (
         <ReadError message={r.error} />
       ) : r.data.length === 0 ? (

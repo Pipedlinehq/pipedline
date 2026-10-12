@@ -6,6 +6,7 @@ import type { CheckoutAdjuster } from '../ordering/contract';
 import { getOrg } from '../tenancy/orgs';
 import { type CodeRow, type CodeView, CODE_COLS, codeAttribution, codeView, effectiveStatus, recordTouch } from './codes';
 import { type OfferRow, type OrderChannel, assertOffersOn, loadOffer, offerDiscountCents, offerSummary, venueOffers } from './definitions';
+import { activeAutomaticOffers, combinesWithApplied, offerBlockedReason, recordOfferUse, releaseOfferUses, tieUsesToSale } from './eligibility';
 import { offerRedeemed, offerRedemptionRefused, offerReleased, offersModule } from './module';
 
 /**
@@ -32,8 +33,11 @@ interface UseContext {
   currency: string;
 }
 
-/** Why this code cannot be used here and now, in plain words; null when it can. */
-function blockedReason(row: CodeRow, offer: OfferRow, use: UseContext): string | null {
+/**
+ * Why this code cannot be used here and now, in plain words; null when it can. The code's own
+ * state first, then the offer's rules (dates, days, services, who it is for, limits).
+ */
+async function blockedReason(ctx: Ctx, row: CodeRow, offer: OfferRow, use: UseContext): Promise<string | null> {
   const status = effectiveStatus(row, use.now);
   if (status === 'redeemed') return 'That code has already been used.';
   if (status === 'voided') return 'That code is no longer valid.';
@@ -42,7 +46,8 @@ function blockedReason(row: CodeRow, offer: OfferRow, use: UseContext): string |
   if (offer.valid_venue_ids && !offer.valid_venue_ids.includes(use.venueId)) return 'That code cannot be used at this venue.';
   if (use.channel && !offer.channels.includes(use.channel)) return 'That code cannot be used on this kind of order.';
   if (use.subtotalCents !== null && use.subtotalCents < offer.min_spend_cents) return `Spend ${formatMoney(offer.min_spend_cents, use.currency)} or more to use this code.`;
-  return null;
+  // The code is the guest's; is the offer behind it on, for them, today?
+  return offerBlockedReason(ctx, offer, { venueId: use.venueId, customerId: use.customerId ?? row.customer_id, at: use.now, channel: use.channel });
 }
 
 interface Redemption {
@@ -136,21 +141,41 @@ export const offersAdjuster: CheckoutAdjuster = {
     const currency = (await getOrg(ctx)).currency;
 
     if (!config.acceptHere) throw invalid('Codes cannot be used at this venue.');
-    const blocked = blockedReason(row, offer, { venueId: draft.venueId, customerId: draft.customerId, now: ctx.now(), channel: draft.channel, subtotalCents: draft.subtotalCents, currency });
+    if (offer.method === 'automatic') throw invalid('That offer is applied by itself; there is no code to enter.');
+    const blocked = await blockedReason(ctx, row, offer, { venueId: draft.venueId, customerId: draft.customerId, now: ctx.now(), channel: draft.channel, subtotalCents: draft.subtotalCents, currency });
     if (blocked) throw invalid(blocked);
 
+    // What the code comes off: one dish, a category, or the whole order.
+    let base = draft.subtotalCents;
     let freeItemPrice: number | null = null;
-    if (offer.discount_kind === 'free_item' && offer.menu_item_id) {
-      const line = draft.lines.find((l) => l.menuItemId === offer.menu_item_id);
-      if (!line) throw invalid('Add the free item to your order to use this code.');
-      freeItemPrice = line.unitPriceCents;
+    if (offer.applies_to === 'item' || offer.discount_kind === 'free_item') {
+      const lines = draft.lines.filter((l) => l.menuItemId === offer.menu_item_id);
+      if (offer.menu_item_id && !lines.length) throw invalid(offer.discount_kind === 'free_item' ? 'Add the free item to your order to use this code.' : 'Add the dish this code is for to your order.');
+      if (lines.length) {
+        base = lines.reduce((s, l) => s + l.lineTotalCents, 0);
+        freeItemPrice = lines[0]!.unitPriceCents;
+      }
+    } else if (offer.applies_to === 'category') {
+      const want = (offer.category ?? '').trim().toLowerCase();
+      const lines = draft.lines.filter((l) => (l.category ?? '').trim().toLowerCase() === want);
+      if (!lines.length) throw invalid(`Add something from ${offer.category} to your order to use this code.`);
+      base = lines.reduce((s, l) => s + l.lineTotalCents, 0);
+    } else if (offer.applies_to === 'delivery') {
+      throw invalid('That code comes off the delivery fee; it is applied when the delivery is priced.');
     }
-    const amountCents = offerDiscountCents(offer, draft.subtotalCents, freeItemPrice);
+    const amountCents = offerDiscountCents(offer, base, freeItemPrice);
     if (amountCents <= 0) throw invalid('That code gives nothing on this order.');
     return { adjuster: 'offers', code: row.code, label: `${offer.name}: ${offerSummary(offer, currency)}`, amountCents, ref: { codeId: row.id, offerId: offer.id } };
   },
 
   async commit(ctx, { orderId, venueId, customerId, transactionId, adjustment }) {
+    if (adjustment.ref.auto === '1') {
+      // An automatic offer priced by automaticAdjustments(): the paid order is one use.
+      const offer = adjustment.ref.offerId ? await loadOffer(ctx, adjustment.ref.offerId) : null;
+      if (!offer) throw notFound('That offer was not found.');
+      await recordOfferUse(ctx, offer, { offerId: offer.id, venueId, customerId, orderId, transactionId, discountCents: adjustment.amountCents, at: ctx.now() });
+      return;
+    }
     const codeId = adjustment.ref.codeId;
     const row = codeId ? await lockCode(ctx, { id: codeId }) : null;
     if (!row) throw notFound('That code was not found.');
@@ -170,10 +195,22 @@ export const offersAdjuster: CheckoutAdjuster = {
   },
 
   async release(ctx, { orderId, adjustment }) {
+    if (adjustment.ref.auto === '1') {
+      await releaseOfferUses(ctx, { orderId });
+      return;
+    }
     const codeId = adjustment.ref.codeId;
     if (codeId) await releaseCode(ctx, codeId, { orderId });
   },
 };
+
+/** Whether this code can go on an order that already carries these adjustments (both sides must allow it). */
+export async function codeCombinesWith(ctx: Ctx, code: string, applied: { adjuster: string; code: string; label: string; amountCents: number; ref: Record<string, string> }[]): Promise<string | null> {
+  const row = ((await ctx.db.selectFrom('offer_codes').select(CODE_COLS).where('code', '=', code.trim()).executeTakeFirst()) as CodeRow | undefined) ?? null;
+  if (!row) return null;
+  const offer = (await loadOffer(ctx, row.offer_id))!;
+  return combinesWithApplied(ctx, offer, applied);
+}
 
 // ── At the till, from the ledger ────────────────────────────────────────────
 
@@ -196,23 +233,29 @@ function candidateCodes(discounts: RecordedInfo['discounts']): Map<string, numbe
  */
 export async function redeemFromSale(ctx: Ctx, txn: RecordedTransaction, info: RecordedInfo): Promise<number> {
   if (txn.orderId) {
-    // An order placed on this platform redeemed through checkout; tie its code to the sale for reporting.
+    // An order placed on this platform redeemed through checkout; tie its code and its automatic uses to the sale for reporting.
     await ctx.db.updateTable('offer_codes').set({ redeemed_transaction_id: txn.id }).where('redeemed_order_id', '=', txn.orderId).where('redeemed_transaction_id', 'is', null).execute();
+    await tieUsesToSale(ctx, txn.orderId, txn.id);
   }
   if (!info.created && (txn.status === 'refunded' || txn.status === 'voided')) {
     const used = await ctx.db.selectFrom('offer_codes').select('id').where('redeemed_transaction_id', '=', txn.id).where('status', '=', 'redeemed').execute();
     for (const u of used) await releaseCode(ctx, u.id, { transactionId: txn.id });
+    await releaseOfferUses(ctx, { transactionId: txn.id });
     return 0;
   }
   if (txn.orderId || !info.discounts.length) return 0;
   if (txn.status !== 'completed' && txn.status !== 'partially_refunded') return 0;
 
+  const config = await venueOffers(ctx, txn.venueId);
+  if (!config || !config.acceptHere || !config.matchTillDiscounts) return 0;
+
+  // A till discount named for one of our automatic offers ("Tuesday pasta night") is a use of it.
+  if (info.created) await matchAutomaticFromSale(ctx, txn, info);
+
   const candidates = candidateCodes(info.discounts);
   if (!candidates.size) return 0;
   const found = (await ctx.db.selectFrom('offer_codes').select(CODE_COLS).where('code', 'in', [...candidates.keys()].slice(0, 40)).forUpdate().execute()) as CodeRow[];
   if (!found.length) return 0;
-  const config = await venueOffers(ctx, txn.venueId);
-  if (!config || !config.acceptHere || !config.matchTillDiscounts) return 0;
 
   let redeemed = 0;
   for (const row of found) {
@@ -251,6 +294,20 @@ export async function redeemFromSale(ctx: Ctx, txn: RecordedTransaction, info: R
   return redeemed;
 }
 
+/** The till applied an automatic offer by name: count the use, once per sale, when the offer was on for that guest that day. */
+async function matchAutomaticFromSale(ctx: Ctx, txn: RecordedTransaction, info: RecordedInfo): Promise<void> {
+  const named = info.discounts.filter((d) => d.name?.trim());
+  if (!named.length) return;
+  const offers = (await activeAutomaticOffers(ctx)).filter((o) => !o.valid_venue_ids || o.valid_venue_ids.includes(txn.venueId));
+  if (!offers.length) return;
+  for (const d of named) {
+    const offer = offers.find((o) => o.name.trim().toLowerCase() === d.name!.trim().toLowerCase());
+    if (!offer) continue;
+    if (await offerBlockedReason(ctx, offer, { venueId: txn.venueId, customerId: txn.customerId, at: txn.occurredAt, channel: null })) continue;
+    await recordOfferUse(ctx, offer, { offerId: offer.id, venueId: txn.venueId, customerId: txn.customerId, transactionId: txn.id, discountCents: Math.max(0, d.amountCents), at: txn.occurredAt });
+  }
+}
+
 // ── At the counter, by staff ────────────────────────────────────────────────
 
 export interface CodeCheck {
@@ -276,7 +333,7 @@ export async function checkCode(ctx: Ctx, raw: z.input<typeof checkCodeInput>): 
   const currency = (await getOrg(ctx)).currency;
   const reason = !config.acceptHere
     ? 'Codes cannot be used at this venue.'
-    : blockedReason(row, offer, { venueId: input.venueId, customerId: null, now, channel: null, subtotalCents: null, currency });
+    : await blockedReason(ctx, row, offer, { venueId: input.venueId, customerId: null, now, channel: null, subtotalCents: null, currency });
   const guest = row.customer_id ? await ctx.db.selectFrom('customers').select(['first_name', 'last_name']).where('id', '=', row.customer_id).executeTakeFirst() : null;
   return {
     code: codeView(row, offer, now, currency),
@@ -315,7 +372,7 @@ export async function redeemCodeAtCounter(ctx: Ctx, raw: z.input<typeof redeemAt
     sale = (await ctx.db.selectFrom('transactions').select(['id', 'customer_id', 'subtotal_cents', 'discount_cents', 'occurred_at']).where('id', '=', input.transactionId).where('venue_id', '=', input.venueId).executeTakeFirst()) ?? null;
     if (!sale) throw notFound('Sale not found');
   }
-  const blocked = blockedReason(row, offer, { venueId: input.venueId, customerId: sale?.customer_id ?? null, now, channel: null, subtotalCents: sale?.subtotal_cents ?? null, currency });
+  const blocked = await blockedReason(ctx, row, offer, { venueId: input.venueId, customerId: sale?.customer_id ?? null, now, channel: null, subtotalCents: sale?.subtotal_cents ?? null, currency });
   if (blocked) throw conflict(blocked);
 
   const discountCents = sale ? (sale.discount_cents > 0 ? sale.discount_cents : offerDiscountCents(offer, sale.subtotal_cents)) : offer.discount_kind === 'fixed' ? offer.value_cents : null;

@@ -57,7 +57,9 @@ first one you build is the moment the model breaks.
 pages(id, org_id, venue_id NULL, slug, title, blocks jsonb, seo_*, published_at)
 ```
 
-Block types: `hero` · `about` · `menu` (pulls live from the `ordering` menu model) · `gallery`
+Block types: `hero` · `about` · `menu` (pulls live from the `ordering` menu model, on the
+`website` channel: items hidden from the website and menus not yet live or already retired are
+left out, `docs/modules/ordering.md` section 1a) · `gallery`
 · `hours-location` · `booking-cta` · `testimonials` · `faq` · `contact` · `rich-text` ·
 `instagram-feed` · `criota-reel` (creator UGC embedded on the venue's own site — this is where
 the two ventures visibly meet).

@@ -220,16 +220,19 @@ export async function assistantVenueInfo(ctx: Ctx, raw: { venueId: string }): Pr
 
 // ── menu_read ────────────────────────────────────────────────────────────────
 
-/** The online menu being served at `at`, cut to the menus the venue shows assistants. */
+/**
+ * The menu being served at `at` on the `assistants` channel (an item hidden from "Inside
+ * assistants" on the console is not here), cut to the menus the venue shows assistants.
+ */
 async function visibleMenu(ctx: Ctx, g: GuestVenue, at: Date): Promise<PublicMenu> {
-  const menu = await getPublicMenu(ctx, g.venue.id, { surface: 'online', at });
+  const menu = await getPublicMenu(ctx, g.venue.id, { surface: 'assistants', at });
   const names = new Set(g.cfg.visible_menus.map((n) => n.toLowerCase()));
   return names.size ? { ...menu, menus: menu.menus.filter((m) => names.has(m.name.trim().toLowerCase())) } : menu;
 }
 
 export const assistantMenuInput = z.object({ venueId: z.string().uuid(), at: z.date().optional() }).strict();
 
-/** The menu as getPublicMenu gives it (surface `online`), limited to the menus the venue allows. Alcohol is marked, never orderable here. */
+/** The menu as getPublicMenu gives it (surface `assistants`), limited to the menus the venue allows. Alcohol is marked, never orderable here. */
 export async function assistantMenu(ctx: Ctx, raw: z.input<typeof assistantMenuInput>): Promise<PublicMenu & { venueName: string; orderable: boolean }> {
   const input = assistantMenuInput.parse(raw);
   const g = await guestVenue(ctx, input.venueId);

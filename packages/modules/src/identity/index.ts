@@ -4,4 +4,5 @@ export * from './consents';
 export * from './merge';
 export * from './resolve';
 export * from './customers';
+export * from './lists';
 export * from './tools';

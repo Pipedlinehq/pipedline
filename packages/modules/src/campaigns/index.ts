@@ -3,11 +3,13 @@ export * from './module';
 export * from './settings';
 export * from './templates';
 
-// Segments: the rule tree, counts (never lists), stored and system segments.
+// Segments (guest lists): the plain query language or a rule tree, counts, stored and default lists.
 export {
   type SegmentLeaf,
   type SegmentPreview,
+  type SegmentQuery,
   type SegmentRule,
+  type SegmentUsage,
   type SegmentView,
   RFM_SEGMENTS,
   SYSTEM_SEGMENTS,
@@ -15,14 +17,19 @@ export {
   deleteSegment,
   ensureSystemSegments,
   getSegment,
+  isQueryRule,
+  isSegmentMember,
   listSegments,
   parseSegmentRule,
   previewSegment,
   previewSegmentInput,
   saveSegment,
   saveSegmentInput,
+  segmentNames,
   segmentRule,
+  segmentUsage,
 } from './segments';
+export * from './segment-tools';
 
 // Lifecycle flows: the console's list and switches, the run, the approved-batch send.
 export {

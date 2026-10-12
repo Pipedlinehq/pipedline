@@ -32,6 +32,8 @@ export interface BulkActionDef {
   body?: string;
   destructive?: boolean;
   reason?: { label: string; placeholder?: string; required?: boolean };
+  /** One thing to pick in the dialog (which channel, which status), posted as `choice`. */
+  choice?: { label: string; options: Array<{ value: string; label: string }> };
   pendingLabel?: string;
 }
 
@@ -201,6 +203,18 @@ function BulkBar({ noun, actions, action, testId }: { noun: { one: string; many:
             </div>
             <form onSubmit={submit} className="space-y-4 p-5">
               <div className="text-sm text-ink-2">{words(open).body}</div>
+              {open.choice ? (
+                <label className="block">
+                  <span className="mb-1 block text-sm font-medium text-ink">{open.choice.label}</span>
+                  <select name="choice" required className="block w-full rounded-md border border-line-strong bg-surface px-3 py-2 text-sm text-ink" data-testid={`${testId}-choice`}>
+                    {open.choice.options.map((o) => (
+                      <option key={o.value} value={o.value}>
+                        {o.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              ) : null}
               {open.reason ? (
                 <label className="block">
                   <span className="mb-1 block text-sm font-medium text-ink">{open.reason.label}</span>

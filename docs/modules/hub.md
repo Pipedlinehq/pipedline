@@ -93,8 +93,11 @@ place to revoke. `modules/pos-adapters.md`'s `connect()` writes here.
 |---|---|---|
 | `venue_status` | read | tenancy (hours, modules on, connection health) |
 | `sales_summary` | read | ledger (by day, daypart, channel; totals and counts only) |
-| `menu_list` | read | ordering |
-| `menu_set_availability` | write | ordering (the 86 button) |
+| `menu_list` | read | menu (schedule state, sold-out-until, where each item shows, channel prices) |
+| `menu_set_availability` | write | menu (the 86 button: end of service · tomorrow · a time · until put back) |
+| `menu_schedule` | write | menu (a menu or section goes live / retires, venue-local; manager) |
+| `menu_show_on` | write | menu (show an item on / hide it from a channel; a section's default; manager) |
+| `menu_set_channel_price` | write | menu (a price on one channel, e.g. delivery; manager) |
 | `hours_set_exception` | write | tenancy (public holiday, closure) |
 | `orders_list` | read | ordering |
 | `customers_summary` | read | identity (aggregates) |
@@ -218,3 +221,37 @@ model assembles the view; it does not compute the revenue figure.
 | Stage 4 | hosted agents; community tier only if there is demand |
 
 Depends on: `tenancy`, `console` (staff and roles), audit. To confirm first: see `VERIFY.md` #13.
+
+## 12. As built: Home and plugin pages (console depth pass, wave 2, 2026-10-13)
+
+`CONSOLE_IA.md` section 9 gave the hub two console surfaces beyond the Assistant page, because
+both are about what the venue's tools do and did.
+
+**Home, needs attention** (pattern 8; `hub/home.ts`). `needsAttention` reads each count through the
+owning module's own list function with the filters its console view uses, so "4 orders to accept"
+and the Orders page's *Needs accepting* tab are the same rows: orders to accept, orders flagged,
+bookings to confirm (today and the next 59 days, as the book's view), things waiting for a yes,
+reviews without a reply, items 86'd. A module that is off or a role that may not look leaves the
+item out rather than showing a zero. Guidance cards (`HOME_CARDS`) are put away per staff member
+(`home_dismissals`). **Suggestions** are at most five, derived from what is already recorded (the
+operations status and the latest weekly digest; no model is asked): a paid order left waiting carries
+the `order_decide` tool with its arguments, the same proposal `ops_watch` makes; a stopped service
+or a finding that reads badly carries a page. *Approve* writes the venue's decision first (unique per
+suggestion) and then runs the tool's own `propose` and `commit` once, as the person approving;
+*Not now* records the reason (`home_suggestion_decisions`) so it is not shown again. Tools:
+`needs_attention` (read) and `suggestion_dismiss` (write, propose/commit).
+
+**Plugin pages** (pattern 14; `hub/plug-detail.ts`, `/console/plugins/[key]`). For every catalogue
+entry: the manifest's reads, writes, needs and consent; the tools it adds with *last used*, the last
+outcome and the 30-day count from `agent_calls` (which holds the tool and how it went, never the
+arguments); for a connected service its connections with status, account, last-worked and expiry,
+*Reconnect* and *Disconnect* (core `revokeConnection`); Configure (the generated form); and in plain
+words what leaves the venue (`DATA_LEAVES`: Criota receives per-venue campaign totals above the
+minimum cohort and never a guest; Square posts sales in and receives online orders; an email
+platform receives consenting guests' profiles; an ad platform receives hashed details of guests who
+ticked that box). A connected service that has neither read nor written for 30 days, counted from its
+last use or its connection, carries a note suggesting it be disconnected. A health check is not a use.
+
+**Weekly digest recipients.** The `weekly_digest` agent now sends to whoever the venue's
+`digest.weekly` alert rules name (Settings → Notifications; `comms.alertRecipients`), falling back
+to the owners when nobody is listed, so the digest is one of the team alerts.

@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { type Ctx, AppError, GUEST_FACING_ROLES, audit, isInternal, notFound, requireOwner, requireStaff, sql, staffOf, hookList, keyedRegistry } from '@ros/core';
 import { getConsents } from './consents';
+import { type ListFrame, listWhere, parseListQuery } from './lists';
 import { normaliseEmail, normalisePhone } from './normalise';
 
 export interface CustomerView {
@@ -10,6 +11,9 @@ export interface CustomerView {
   email: string | null;
   phone: string | null;
   birthday: string | null;
+  /** Where they live, as they or staff gave it. Lists can ask "suburb is Newtown". */
+  suburb: string | null;
+  postcode: string | null;
   allergyNotes: string | null;
   /** Staff-only. Never returned to the guest or to an assistant. */
   notes: string | null;
@@ -25,6 +29,8 @@ const COLS = [
   'primary_email',
   'primary_phone',
   'birthday',
+  'suburb',
+  'postcode',
   'allergy_notes',
   'notes',
   'first_seen_venue_id',
@@ -64,6 +70,8 @@ export async function getCustomer(ctx: Ctx, customerId: string): Promise<Custome
     email: r.primary_email,
     phone: r.primary_phone,
     birthday: r.birthday,
+    suburb: r.suburb,
+    postcode: r.postcode,
     allergyNotes: r.allergy_notes,
     notes: who === 'guest' ? null : r.notes,
     firstSeenVenueId: r.first_seen_venue_id,
@@ -137,6 +145,8 @@ export const listCustomersInput = z
     regular: z.object({ minVisits: z.number().int().min(1).max(100), withinDays: z.number().int().min(1).max(730) }).optional(),
     /** Guests who have been in before but not for this many days ("lapsed 60+ days"). */
     lapsedDays: z.number().int().min(1).max(730).optional(),
+    /** A guest-list rule in the plain query language (lists.ts), e.g. "last visit more than 60 days ago and said yes to email". */
+    query: z.string().trim().min(1).max(600).optional(),
     limit: z.number().int().min(1).max(200).default(50),
   })
   .strict();
@@ -201,6 +211,12 @@ export async function listCustomers(ctx: Ctx, raw: z.input<typeof listCustomersI
     const cutoff = new Date(now.getTime() - input.lapsedDays * 86_400_000);
     q = q.where('v.last_visit_at', 'is not', null).where('v.last_visit_at', '<', cutoff);
   }
+  if (input.query) {
+    // The rule is parsed to a tree and compiled to parameterised SQL; the text never reaches the query.
+    const node = parseListQuery(input.query);
+    const frame: ListFrame = { now, venueId: input.venueId ?? null };
+    q = q.where(sql<boolean>`${listWhere(ctx, node, frame)}`);
+  }
   const rows = await q.execute();
   return rows.map((r) => ({
     id: r.id,
@@ -219,6 +235,8 @@ export const updateCustomerInput = z
     firstName: z.string().max(100).nullable(),
     lastName: z.string().max(100).nullable(),
     birthday: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable(),
+    suburb: z.string().trim().max(80).nullable(),
+    postcode: z.string().trim().max(12).nullable(),
     allergyNotes: z.string().max(2000).nullable(),
     notes: z.string().max(5000).nullable(),
   })
@@ -234,6 +252,8 @@ export async function updateCustomer(ctx: Ctx, customerId: string, raw: z.input<
       ...(input.firstName !== undefined ? { first_name: input.firstName } : {}),
       ...(input.lastName !== undefined ? { last_name: input.lastName } : {}),
       ...(input.birthday !== undefined ? { birthday: input.birthday } : {}),
+      ...(input.suburb !== undefined ? { suburb: input.suburb || null } : {}),
+      ...(input.postcode !== undefined ? { postcode: input.postcode || null } : {}),
       ...(input.allergyNotes !== undefined ? { allergy_notes: input.allergyNotes } : {}),
       ...(input.notes !== undefined && who !== 'guest' ? { notes: input.notes } : {}),
     })

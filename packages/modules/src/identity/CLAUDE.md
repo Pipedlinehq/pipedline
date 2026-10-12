@@ -22,10 +22,16 @@ Other modules (the entry point for any surface that sees a guest):
 - Normalisers: `normaliseEmail`, `normalisePhone` (E.164, AU default), `hashCardIdentifier(app, orgId, kind, raw)`, `toStoredIdentities(app, orgId, hints)`.
 
 Console / guest:
-- `getCustomer(ctx, customerId)` — staff in `GUEST_FACING_ROLES`, the guest themself, or internal. `notes` is null for the guest. A merged id answers as the winner (except to a guest).
+- `getCustomer(ctx, customerId)` — staff in `GUEST_FACING_ROLES`, the guest themself, or internal. `notes` is null for the guest. A merged id answers as the winner (except to a guest). The view carries `suburb` and `postcode` (migration 0780).
 - `searchCustomers(ctx, { q, limit? })` — staff in `GUEST_FACING_ROLES`; max 50.
-- `listCustomers(ctx, { venueId?, q?, createdSince?, consent?, regular?: { minVisits, withinDays }, lapsedDays?, limit? })` — the Customers index with its views (docs/CONSOLE_IA.md section 9, wave 1). Same roles. Rows are `CustomerListRow` = summary + `visits` and `lastVisitAt`, counted from `transactions` (a spine table identity may read), at `venueId` when given; `consent` keeps guests holding that consent now; most recent visit first; max 200.
-- `updateCustomer(ctx, customerId, input)` — same readers; a guest cannot set `notes`.
+- `listCustomers(ctx, { venueId?, q?, createdSince?, consent?, regular?: { minVisits, withinDays }, lapsedDays?, query?, limit? })` — the Customers index with its views (docs/CONSOLE_IA.md section 9, wave 1). Same roles. Rows are `CustomerListRow` = summary + `visits` and `lastVisitAt`, counted from `transactions` (a spine table identity may read), at `venueId` when given; `consent` keeps guests holding that consent now; `query` is a guest-list rule in the plain query language (below), so a list's members can be read back; most recent visit first; max 200.
+- `updateCustomer(ctx, customerId, input)` — same readers; a guest cannot set `notes`. Also `suburb`, `postcode`.
+
+Guest lists, the grammar and its SQL (`list-grammar.ts`, pure, no imports; `lists.ts`; docs/CONSOLE_IA.md section 9, pattern 5). The identity spine owns the language because both campaigns (segments) and offers (who an offer is for) read it; campaigns owns the stored lists (`segments`, definition `{ query }`).
+- Grammar: `query := group ("or" group)*`, `group := clause ("and" clause)*`, `clause := "(" query ")" | field operator value`. Fields: last visit, first visit, visits, spend, average spend, said yes to email, said yes to texts, loyalty member, no-shows, suburb, source (`LIST_FIELDS`, with the operators per kind in `OPERATORS`). Operators: more than / less than / is / is not (numbers, money as `$500`, yes/no, text), within the last N days / more than N days ago / is never (dates). "and" binds before "or"; at most `MAX_CLAUSES` (10) conditions; text under 600 characters; anything else is refused in a sentence (`ListQueryError`, surfaced as `invalid`).
+- `parseListQuery(text)` → `ListNode`; `listText(node)` → the canonical text (round-trips); `listWords(node)` → "Guests who …"; `clauseText`, `countClauses`, `fieldInfo`, `sameList`.
+- `compileListQuery(node, { now, venueId? })` → one boolean `RawBuilder` over `customers c`: every field is a fixed column or correlated sub-select written in `lists.ts` (sales from `transactions` excluding voided, net of refunds; consents; `events` for `loyalty.enrolled` and `booking.no_show`; `c.suburb`; `c.acquisition_source`); every typed value is a bound parameter. `listWhere(ctx, node, frame)` adds the org and active-status guards; `countListMembers`, `isListMember`, `reachableByListSql(channel)` (address + consent + not suppressed, the count-side twin of comms' send-time check).
+- First visit is the first counted sale, else when the record was made; last visit is the last counted sale (null = "never"). Average spend is spend / visits, false with no visits.
 - `getConsents(ctx, customerId)` — staff, the guest, or internal.
 - `grantConsent(ctx, input)` — refuses staff and devices; a guest only for self; `source: 'import'` only from internal code, needs `sourceDetail`, and never for `card_recognition`.
 - `revokeConsent(ctx, input)` — guest (self), staff (on request) or internal; not anon or device. Revoking `card_recognition` deletes card identities.
@@ -63,6 +69,7 @@ No providers. Card hashing uses `app.secrets.orgKey(orgId, 'identity_hmac')`.
 
 ## Known gaps
 
+- `suburb` and `postcode` are filled by staff (the guest page) or `updateCustomer`; nothing copies a delivery address onto the guest record yet, so "suburb is …" lists cover guests whose suburb has been written down.
 - `exportCustomer`, `eraseCustomer` and `mergeCustomers` are called only from tests; no console or guest route uses them yet.
 - Merge and erase write `transactions`, `transaction_attributions` and `visitor_sessions` directly rather than through ledger/events functions.
 - There is no function to manage `consent_wordings`; rows come from migrations/seeds.

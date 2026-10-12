@@ -161,13 +161,16 @@ export default async function PluginsPage() {
                         ) : !isPlug ? (
                           <p className="mt-4 text-sm text-ink-3">No settings to set.</p>
                         ) : null}
-                        {p.docs ? (
-                          <p className="mt-3 text-xs text-ink-3">
+                        <p className="mt-3 flex flex-wrap gap-3 text-xs text-ink-3">
+                          <Link href={`/console/plugins/${encodeURIComponent(p.key)}`} className="text-accent" data-testid={`plugin-detail-${p.key}`}>
+                            Details: tools, last used, what leaves the venue
+                          </Link>
+                          {p.docs ? (
                             <Link href={p.docs} className="text-accent">
                               How it works
                             </Link>
-                          </p>
-                        ) : null}
+                          ) : null}
+                        </p>
                       </Card>
                     );
                   })}

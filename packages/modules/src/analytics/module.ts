@@ -25,7 +25,7 @@ export const analyticsModule = defineModule({
     writes: ['daily and hourly facts', 'digests', 'saved views'],
     consent: 'Figures are totals. No figure is given for a group of guests smaller than the venue\'s minimum, and nothing per guest leaves the venue.',
   },
-  tables: ['fact_sales_daily', 'fact_sales_hourly', 'fact_item_daily', 'fact_customer', 'fact_events_daily', 'fact_campaign_daily', 'rollup_state', 'insight_digests', 'saved_views', 'benchmark_bands'],
+  tables: ['fact_sales_daily', 'fact_sales_hourly', 'fact_item_daily', 'fact_customer', 'fact_events_daily', 'fact_campaign_daily', 'rollup_state', 'insight_digests', 'saved_views', 'benchmark_bands', 'report_definitions', 'report_targets', 'report_annotations'],
   configSchema: analyticsConfig,
   configVersion: 1,
   defaultConfig: analyticsConfig.parse({}),

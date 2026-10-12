@@ -59,7 +59,7 @@ describe('plugin manifests and the public catalogue', () => {
     expect(by['criota-sim']).toBeDefined();
 
     // Tools are the module's own defineTool tools: name, effect, description.
-    expect(by.bookings!.tools.map((x) => x.name)).toEqual(['booking_add', 'booking_availability', 'booking_cancel', 'booking_confirm', 'booking_decline', 'bookings_list', 'bookings_today']);
+    expect(by.bookings!.tools.map((x) => x.name)).toEqual(['booking_add', 'booking_availability', 'booking_cancel', 'booking_confirm', 'booking_decline', 'booking_nudge', 'bookings_list', 'bookings_today']);
     expect(by.bookings!.tools.find((x) => x.name === 'booking_confirm')).toMatchObject({ effect: 'write', description: expect.stringMatching(/./) });
     expect(by.tenancy!.tools.map((x) => x.name)).toEqual(expect.arrayContaining(['plugins_list', 'plugin_enable', 'venue_describe', 'connections_list']));
     expect(by.events!.tools).toEqual([]);

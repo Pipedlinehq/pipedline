@@ -8,11 +8,11 @@ import { resolveView, type ViewSpec } from '@/lib/console-views';
 import { app } from '@/lib/runtime';
 import { BulkSelection, RowBox, SelectAllBox, type BulkActionDef } from '@/components/console/bulk';
 import { ConfirmAction, InlineAction } from '@/components/console/confirm';
-import { BOOKING_SOURCE, BookingStatusBadge, covers } from '@/components/console/booking-bits';
+import { BookingSourceBadge, BookingStatusBadge, NoShowCount, bookingNudgeWords, covers } from '@/components/console/booking-bits';
 import { ModuleOff, NotForYourRole, ReadError } from '@/components/console/states';
 import { IndexViews } from '@/components/console/views';
-import { ActionForm, Badge, Card, Checkbox, Dialog, EmptyState, Field, GuestText, Input, LinkButton, PageHeader, SubmitButton, Table, Td, Textarea, Th, dayLabel, timeOnly } from '@/ui';
-import { addBooking, bulkBookings, cancelBooking, completeBooking, confirmBooking, declineBooking, markNoShow, seatBooking } from './actions';
+import { ActionForm, Badge, Card, Checkbox, Dialog, EmptyState, Field, GuestText, Input, LinkButton, PageHeader, SubmitButton, Table, Td, Textarea, Th, dateTime, dayLabel, timeOnly } from '@/ui';
+import { addBooking, bulkBookings, cancelBooking, completeBooking, confirmBooking, declineBooking, markNoShow, nudgeBooking, seatBooking } from './actions';
 import { deleteView, renameView, saveView } from '../views-actions';
 
 export const metadata = { title: 'Bookings · Pipedline' };
@@ -28,6 +28,7 @@ const SPEC: ViewSpec = {
     { key: 'tomorrow', label: 'Tomorrow', filters: { when: 'tomorrow' } },
     { key: 'confirming', label: 'Needs confirming', filters: { when: 'next60', status: 'requested' } },
     { key: 'week', label: 'This week', filters: { when: 'week' } },
+    { key: 'unfinished', label: "Didn't finish", filters: { unfinished: 'yes' } },
   ],
   fields: [
     {
@@ -59,6 +60,18 @@ const SPEC: ViewSpec = {
       ],
     },
     { key: 'show', label: 'Include', kind: 'select', options: [{ value: 'all', label: 'Declined, cancelled and finished too' }] },
+    {
+      key: 'source',
+      label: 'Came from',
+      kind: 'select',
+      options: [
+        { value: 'web', label: 'Website' },
+        { value: 'assistant', label: 'Inside assistants' },
+        { value: 'phone', label: 'Phone' },
+        { value: 'staff', label: 'Staff' },
+      ],
+    },
+    { key: 'unfinished', label: "Didn't finish", kind: 'select', options: [{ value: 'yes', label: 'Requests the venue never answered' }] },
   ],
 };
 
@@ -85,7 +98,9 @@ export default async function BookingsPage({ searchParams }: { searchParams: Pro
   const today = localDate(app().clock(), tz);
   const range = dayRange(f, today);
   const status = f.status ? [f.status as bookings.BookingStatus] : undefined;
+  const isUnfinished = f.unfinished === 'yes';
   const day = await read((ctx) => bookings.listBookings(ctx, { venueId: c.venue.id, date: range.date, ...(range.to ? { to: range.to } : {}), service: f.service || undefined, show: f.show === 'all' ? 'all' : 'active', ...(status ? { status } : {}) }));
+  if (day.ok && f.source) day.data.bookings = day.data.bookings.filter((b) => b.source === f.source);
 
   const oneDay = !range.to;
   const dayLink = (d: string) => `/console/bookings?view=${encodeURIComponent(resolved.current.key)}&f=1&date=${d}${f.service ? `&service=${encodeURIComponent(f.service)}` : ''}${f.show ? `&show=${f.show}` : ''}${f.status ? `&status=${f.status}` : ''}`;
@@ -152,7 +167,7 @@ export default async function BookingsPage({ searchParams }: { searchParams: Pro
         renameAction={renameView}
         deleteAction={deleteView}
         aside={
-          oneDay ? (
+          oneDay && !isUnfinished ? (
             <nav aria-label="Day" className="flex flex-wrap items-center gap-2">
               <LinkButton href={dayLink(addDays(range.date, -1))} size="sm">
                 ← Day before
@@ -165,7 +180,9 @@ export default async function BookingsPage({ searchParams }: { searchParams: Pro
         }
       />
 
-      {!day.ok ? (
+      {isUnfinished ? (
+        <UnfinishedBookings venueId={c.venue.id} tz={tz} filters={f} />
+      ) : !day.ok ? (
         <ReadError message={day.error} />
       ) : (
         <div className="space-y-6">
@@ -252,6 +269,11 @@ export default async function BookingsPage({ searchParams }: { searchParams: Pro
                           <Link href={`/console/bookings/${b.id}`} className="block font-mono text-xs text-accent">
                             {b.reference}
                           </Link>
+                          {b.noShowCount > 0 ? (
+                            <span className="mt-1 block" data-testid={`noshows-${b.reference}`}>
+                              <NoShowCount count={b.noShowCount} />
+                            </span>
+                          ) : null}
                         </Td>
                         <Td className="text-xs">
                           {b.guestPhone ? <span className="block">{b.guestPhone}</span> : null}
@@ -268,9 +290,14 @@ export default async function BookingsPage({ searchParams }: { searchParams: Pro
                           {b.overCapacity ? <Badge tone="warn">Over capacity</Badge> : null}
                           {b.statusReason ? <p className="text-ink-3">Reason: {b.statusReason}</p> : null}
                         </Td>
-                        <Td className="text-xs text-ink-2">{BOOKING_SOURCE[b.source] ?? b.source}</Td>
                         <Td>
-                          <BookingStatusBadge status={b.status} />
+                          <BookingSourceBadge source={b.source} />
+                        </Td>
+                        <Td>
+                          <div className="flex flex-wrap gap-1">
+                            <BookingStatusBadge status={b.status} />
+                            {b.recoveredAt ? <Badge tone="good">Recovered</Badge> : b.abandonedAt && !b.purgedAt ? <Badge tone="warn">Didn&apos;t finish</Badge> : null}
+                          </div>
                           {b.status === 'cancelled' && b.cancelledBy ? <span className="block text-xs text-ink-3">by {b.cancelledBy}</span> : null}
                         </Td>
                         <Td align="right">
@@ -310,6 +337,116 @@ export default async function BookingsPage({ searchParams }: { searchParams: Pro
         </div>
       )}
     </>
+  );
+}
+
+/**
+ * "Didn't finish" for bookings (pattern 7). The bookings flow records no "started" step, so the
+ * unfinished booking is the request the venue never answered inside its window: it is still the
+ * guest's own request, so the one nudge tells them it is waiting and how to cancel. Confirming
+ * or declining is the better answer; the nudge is for when neither can happen yet.
+ */
+async function UnfinishedBookings({ venueId, tz, filters }: { venueId: string; tz: string; filters: Record<string, string> }) {
+  const r = await read((ctx) => bookings.listUnfinishedBookings(ctx, { venueId, limit: 200 }));
+  if (!r.ok) return <ReadError message={r.error} />;
+  const rows = r.data.filter((b) => !filters.source || b.source === filters.source);
+  return (
+    <Card
+      title="Booking requests the venue did not answer in time"
+      description="A request still waiting for a yes when the venue's window ran out (set under Booking rules). Confirm or decline it if you can; one nudge may be sent to say it is still waiting. Details are removed after three months."
+      padded={false}
+    >
+      {rows.length === 0 ? (
+        <div className="p-5">
+          <EmptyState title="Every request was answered in time">A request appears here when it has waited longer than the booking rules allow, or its time arrived, without a yes or a no.</EmptyState>
+        </div>
+      ) : (
+        <Table label="Unanswered booking requests">
+          <thead>
+            <tr>
+              <Th>Booking</Th>
+              <Th>Guest</Th>
+              <Th>For</Th>
+              <Th>Waiting since</Th>
+              <Th>Email status</Th>
+              <Th>Recovery status</Th>
+              <Th>
+                <span className="sr-only">Actions</span>
+              </Th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((b) => {
+              const canNudge = b.status === 'requested' && !b.nudgeSentAt && !b.recoveredAt && (b.guestEmail || b.guestPhone);
+              return (
+                <tr key={b.id} data-testid={`unfinished-booking-${b.reference}`} data-recovered={b.recoveredAt ? 'true' : 'false'}>
+                  <Td>
+                    <Link href={`/console/bookings/${b.id}`} className="font-mono text-xs text-accent">
+                      {b.reference}
+                    </Link>
+                    <span className="block text-xs text-ink-3">
+                      <BookingStatusBadge status={b.status} />
+                    </span>
+                  </Td>
+                  <Td className="text-xs">
+                    <GuestText>{b.guestName}</GuestText>
+                    {b.guestEmail ? <span className="block break-all text-ink-2">{b.guestEmail}</span> : null}
+                    {b.guestPhone ? <span className="block text-ink-2">{b.guestPhone}</span> : null}
+                    {b.noShowCount > 0 ? (
+                      <span className="mt-1 block">
+                        <NoShowCount count={b.noShowCount} />
+                      </span>
+                    ) : null}
+                  </Td>
+                  <Td className="whitespace-nowrap">
+                    {covers(b.partySize)} at {b.time}, {dayLabel(b.date)}
+                    <span className="block text-xs text-ink-3">
+                      <BookingSourceBadge source={b.source} />
+                    </span>
+                  </Td>
+                  <Td className="whitespace-nowrap">{dateTime(b.createdAt, tz)}</Td>
+                  <Td>
+                    <span className="block" data-testid={`email-status-${b.reference}`}>
+                      {bookingNudgeWords(b)}
+                      {b.nudgeSentAt ? <span className="block text-xs text-ink-3">{dateTime(b.nudgeSentAt, tz)}</span> : null}
+                    </span>
+                  </Td>
+                  <Td>
+                    <span className="block" data-testid={`recovery-status-${b.reference}`}>
+                      {b.recoveredAt ? (
+                        <>
+                          <Badge tone="good">Recovered</Badge>
+                          <span className="block text-xs text-ink-3">{dateTime(b.recoveredAt, tz)}</span>
+                        </>
+                      ) : (
+                        'Not recovered'
+                      )}
+                    </span>
+                  </Td>
+                  <Td align="right">
+                    <div className="flex flex-wrap justify-end gap-1.5">
+                      {b.status === 'requested' ? <InlineAction action={confirmBooking} hidden={{ bookingId: b.id }} label="Confirm" variant="primary" testId={`confirm-${b.reference}`} /> : null}
+                      {b.status === 'requested' ? (
+                        <ConfirmAction trigger="Decline" title={`Decline ${b.reference}?`} action={declineBooking} hidden={{ bookingId: b.id }} confirmLabel="Decline" reason={{ label: 'Tell the guest why (optional)', required: false, minLength: 0 }} testId={`decline-${b.reference}`}>
+                          <p>The request is turned down and the guest is told.</p>
+                        </ConfirmAction>
+                      ) : null}
+                      {canNudge ? (
+                        <ConfirmAction trigger="Send a nudge" title={`Nudge the guest about ${b.reference}?`} action={nudgeBooking} hidden={{ bookingId: b.id }} confirmLabel="Send the nudge" variant="primary" testId={`nudge-${b.reference}`}>
+                          <p>
+                            One message goes to the guest by {b.guestEmail ? 'email' : 'text message'}: their request for {covers(b.partySize)} at {b.time} on {dayLabel(b.date)} is still waiting, how to reach the venue, and their own link to cancel. It is the only nudge they will get.
+                          </p>
+                        </ConfirmAction>
+                      ) : null}
+                    </div>
+                  </Td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </Table>
+      )}
+    </Card>
   );
 }
 

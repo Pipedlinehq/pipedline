@@ -12,7 +12,8 @@ import { readTable } from '@/lib/site-table';
 export const POST = route(async (req, { params }: { params: Promise<{ host: string }> }) => {
   const actor = await siteActor(req, (await params).host);
   const body = await readJson<Record<string, unknown>>(req);
-  const input = pick(body, ['venueId', 'channel', 'lines', 'codes', 'tipCents', 'slotStart', 'deliveryId', 'idempotencyKey', 'customer', 'note', 'consents', 'flags'] as const);
+  // `source` says where the guest came from (their own assistant handed them a cart); the service accepts only website or assistant.
+  const input = pick(body, ['venueId', 'channel', 'lines', 'codes', 'tipCents', 'slotStart', 'deliveryId', 'idempotencyKey', 'customer', 'note', 'consents', 'flags', 'source'] as const);
   const table = input.channel === 'dine-in-qr' ? await readTable(input.venueId) : null;
   const order = await app().tenant(
     actor.site.orgId,

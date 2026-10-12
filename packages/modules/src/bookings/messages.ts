@@ -69,6 +69,13 @@ export const bookingTemplates = [
     'Hi {{first_name}},\n\nA reminder of your booking for {{party_line}} at {{venue_name}} on {{when_line}}.\n\nReference: {{reference}}\n\nCannot make it? Please cancel so someone else can have the table: {{manage_url}}\n\n{{contact_line}}',
     '{{venue_name}}: reminder, {{party_line}} on {{when_line}} (ref {{reference}}). Cannot make it? Cancel: {{manage_url}}',
   ),
+  ...t(
+    'booking.unanswered',
+    'The one nudge staff may send about a booking request the venue has not answered: it is still waiting, how to reach the venue, and the guest\'s own link to see or cancel it. Never a second one, never an offer.',
+    'Your booking request at {{venue_name}} is still waiting',
+    'Hi {{first_name}},\n\nYour request for {{party_line}} at {{venue_name}} on {{when_line}} (reference {{reference}}) has not been confirmed yet. Sorry for the wait.\n\nIf you still want the table, we will be in touch; {{contact_line}}\n\nIf you no longer need it, you can cancel it here: {{manage_url}}',
+    '{{venue_name}}: your request {{reference}} for {{party_line}} on {{when_line}} is still waiting on us, sorry. {{contact_line}} No longer needed? Cancel: {{manage_url}}',
+  ),
 ];
 
 // ── The guest's manage link ──────────────────────────────────────────────────
@@ -125,7 +132,7 @@ export const partyLine = (n: number) => (n === 1 ? 'one person' : `${n} people`)
 
 // ── Sending ──────────────────────────────────────────────────────────────────
 
-export type BookingMessage = 'confirmed' | 'requested' | 'declined' | 'cancelled' | 'reminder';
+export type BookingMessage = 'confirmed' | 'requested' | 'declined' | 'cancelled' | 'reminder' | 'unanswered';
 
 export interface Notifiable {
   id: string;
@@ -143,11 +150,12 @@ export interface Notifiable {
 /**
  * Queue one transactional message to whoever made the booking: by email if they gave one, by
  * SMS if they gave only a phone number, not at all if they gave neither. One message per booking
- * per `what`, however many times this is reached.
+ * per `what`, however many times this is reached. Returns what the outbox did, or null when
+ * there was no one to write to.
  */
-export async function notifyGuest(ctx: Ctx, b: Notifiable, what: BookingMessage): Promise<void> {
+export async function notifyGuest(ctx: Ctx, b: Notifiable, what: BookingMessage): Promise<{ messageId: string; status: 'queued' | 'suppressed'; reason?: string; via: 'email' | 'sms' } | null> {
   const channel = b.guest_email ? 'email' : b.guest_phone ? 'sms' : null;
-  if (!channel) return;
+  if (!channel) return null;
   const venue = await getVenue(ctx, b.venue_id);
   const token = await manageToken(ctx.app, ctx.orgId, b.id);
   const variables: BookingMessageVars = {
@@ -160,7 +168,7 @@ export async function notifyGuest(ctx: Ctx, b: Notifiable, what: BookingMessage)
     contact_line: venue.phone ? `Questions? Call ${venue.name} on ${venue.phone}.` : '',
     reason_line: b.status_reason ? `From ${venue.name}: ${b.status_reason}` : '',
   };
-  await queueMessage(ctx, {
+  const r = await queueMessage(ctx, {
     templateKey: `booking.${what}`,
     channel,
     idempotencyKey: `booking:${b.id}:${what}`,
@@ -169,6 +177,7 @@ export async function notifyGuest(ctx: Ctx, b: Notifiable, what: BookingMessage)
     to: channel === 'email' ? b.guest_email : b.guest_phone,
     venueId: b.venue_id,
   });
+  return { ...r, via: channel };
 }
 
 const WORKER = { kind: 'worker' as const, job: 'bookings.reminder' };

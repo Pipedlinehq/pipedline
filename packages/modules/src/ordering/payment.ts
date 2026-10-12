@@ -43,7 +43,7 @@ import { getVenue } from '../tenancy/venues';
 import { getCheckoutAdjuster } from './contract';
 import { orderFlagged, orderingModule, orderPaid, orderRefunded, paymentFailed, paymentReconciled, posPushed } from './module';
 import { notifyGuest, trackingUrl } from './notify';
-import { type OrderView, TERMINAL, loadOrderByToken, ownOrderView, transition } from './orders';
+import { type OrderView, TERMINAL, loadOrderByToken, markRecoveredOrders, ownOrderView, transition } from './orders';
 import { type OrderItemRow, type OrderRow, type PaymentRow, adjustmentsOf, firstName, frozenModifiers, itemSummary, loadItems, loadOrder, whenLine } from './rows';
 import { createTicket, moveOrder } from './tickets';
 
@@ -104,10 +104,16 @@ export async function getCheckoutOptions(app: App, actor: Actor, venueId: string
 
 const LEDGER_CHANNEL = { pickup: 'pickup', delivery: 'delivery', 'dine-in-qr': 'dine-in' } as const;
 
+/** The payments row's provider for a draft marked paid by cash or bank (drafts.ts). No processor is behind it. */
+export const MANUAL_PROVIDER = 'manual';
+
+/** What the ledger calls the tender: the card for a processor payment, the order's own record for a manual one. */
+const tenderOf = (order: Pick<OrderRow, 'total_cents' | 'paid_by'>, provider: string): string => (order.total_cents <= 0 ? 'none' : provider === MANUAL_PROVIDER ? (order.paid_by ?? 'other') : 'card');
+
 function canonical(
   order: OrderRow,
   items: OrderItemRow[],
-  args: { externalRef: string; occurredAt: Date; raw: unknown; refundedCents: number; hints: IdentityHint[]; taxInclusive: boolean; taxRateBp: number },
+  args: { externalRef: string; occurredAt: Date; raw: unknown; refundedCents: number; hints: IdentityHint[]; taxInclusive: boolean; taxRateBp: number; tender: string },
 ): CanonicalTransaction {
   const paid = order.total_cents;
   return {
@@ -123,7 +129,7 @@ function canonical(
     totalCents: paid,
     refundedCents: args.refundedCents,
     currency: order.currency,
-    tenderType: paid > 0 ? 'card' : 'none',
+    tenderType: args.tender,
     tableLabel: order.table_label,
     orderId: order.id,
     lines: items.map((i) => ({
@@ -395,7 +401,7 @@ export async function settlePayment(ctx: Ctx, args: { orderId: string; key: stri
   // The ledger: one row per sale, keyed by the processor's payment id.
   const recorded = await recordTransaction(
     ctx,
-    canonical(order, items, { externalRef: result.externalRef, occurredAt: now, raw: result.raw, refundedCents: 0, hints: args.hints, taxInclusive: org.taxInclusive, taxRateBp: org.taxRateBp }),
+    canonical(order, items, { externalRef: result.externalRef, occurredAt: now, raw: result.raw, refundedCents: 0, hints: args.hints, taxInclusive: org.taxInclusive, taxRateBp: org.taxRateBp, tender: tenderOf(order, args.provider) }),
     { venueId: order.venue_id, customerId: order.customer_id, via: 'online-order' },
   );
   order = await ctx.db
@@ -439,9 +445,12 @@ export async function settlePayment(ctx: Ctx, args: { orderId: string; key: stri
     { order_id: order.id, channel: order.channel, total_cents: order.total_cents, discount_cents: order.discount_cents, tip_cents: order.tip_cents, identified: order.customer_id !== null },
     { venueId: order.venue_id, customerId: order.customer_id, sessionId: order.session_id },
   );
+  // This order, or an earlier one the same guest did not finish, is recovered now.
+  order = await markRecoveredOrders(ctx, order);
 
   // Put the order where the venue's staff already look, when their POS takes orders once paid.
-  const pos = await findConnectionFor(ctx, 'pos', order.venue_id);
+  // A draft marked paid by cash or bank names no processor payment, so it is not pushed.
+  const pos = args.provider === MANUAL_PROVIDER ? null : await findConnectionFor(ctx, 'pos', order.venue_id);
   if (pos && !order.pos_order_ref && orderPushMode(ctx.app, pos) === 'after_payment') {
     await enqueue(ctx, pushOrderToPosJob, { orderId: order.id }, { key: `pos-push:${order.id}` });
   }
@@ -656,6 +665,9 @@ export async function refundOrder(app: App, actor: Actor, raw: z.input<typeof re
       const prior = await ctx.db.selectFrom('refunds').selectAll().where('idempotency_key', '=', key).executeTakeFirst();
       if (prior?.status === 'completed') return { kind: 'done' as const, refundId: prior.id, amountCents: prior.amount_cents, order };
 
+      if (payment?.provider === MANUAL_PROVIDER) {
+        throw invalid(`This order was paid by ${order.paid_by === 'bank' ? 'bank transfer' : order.paid_by === 'cash' ? 'cash' : 'other means'}, not by card, so a refund has to be given the same way. Record it at the till.`);
+      }
       const charged = payment ? payment.amount_cents + payment.tip_cents : 0;
       const inFlight = payment
         ? await ctx.db
@@ -762,6 +774,7 @@ export async function settleRefund(ctx: Ctx, args: { refundId: string; orderId: 
         hints: [],
         taxInclusive: org.taxInclusive,
         taxRateBp: org.taxRateBp,
+        tender: tenderOf(order, payment.provider),
       }),
       { venueId: order.venue_id, customerId: order.customer_id, via: 'online-order' },
     );

@@ -1,6 +1,9 @@
 /**
  * Segment rules in plain words, and the lists the rule editor offers. Safe for client
  * components: nothing here imports server code. The service validates every rule again.
+ *
+ * A guest list written in the plain query language is `{ query: "…" }`; its words are the
+ * query itself (the server writes the fuller sentence in `SegmentView.words`).
  */
 
 export const RFM = ['new', 'one_timer', 'repeater', 'frequent', 'loyal', 'at_risk', 'lapsed'] as const;
@@ -8,7 +11,7 @@ export const SALE_CHANNELS = ['dine-in', 'pickup', 'delivery', 'catering', 'reta
 export const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 
 export type Leaf = { field: string; [k: string]: unknown };
-export type Rule = Leaf | { all: Rule[] } | { any: Rule[] } | { not: Rule };
+export type Rule = Leaf | { query: string } | { all: Rule[] } | { any: Rule[] } | { not: Rule };
 
 export const FIELDS: Array<{ value: string; label: string; kind: 'rfm' | 'score' | 'range' | 'money' | 'dates' | 'words' | 'channels' | 'venues' | 'consent' | 'yesno' | 'months' }> = [
   { value: 'rfm_segment', label: 'Customer segment', kind: 'rfm' },
@@ -82,8 +85,11 @@ function leafWords(r: Leaf, venueName: (id: string) => string): string {
   }
 }
 
+export const isQuery = (rule: Rule): rule is { query: string } => 'query' in rule && typeof (rule as { query: unknown }).query === 'string';
+
 /** A rule tree as a sentence. */
 export function ruleWords(rule: Rule, venueName: (id: string) => string = () => 'a venue', top = true): string {
+  if (isQuery(rule)) return rule.query;
   if ('all' in rule) {
     const s = (rule.all as Rule[]).map((r) => ruleWords(r, venueName, false)).join(' and ');
     return top ? s : `(${s})`;
@@ -101,9 +107,11 @@ export interface EditorRow {
   leaf: Leaf;
 }
 
-/** The form edits "all / any of these conditions", each optionally negated. Deeper trees are shown in words only. */
+/** The form edits "all / any of these conditions", each optionally negated. Deeper trees and plain-words lists are shown in words only. */
 export function toRows(rule: Rule): { join: 'all' | 'any'; rows: EditorRow[] } | null {
+  if (isQuery(rule)) return null;
   const row = (r: Rule): EditorRow | null => {
+    if (isQuery(r)) return null;
     if ('field' in r) return { not: false, leaf: r as Leaf };
     if ('not' in r && 'field' in (r.not as Rule)) return { not: true, leaf: r.not as Leaf };
     return null;
