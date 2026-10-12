@@ -25,7 +25,7 @@ describe('console analytics: numbers that trace to the ledger', () => {
     const diner = await orgBySlug('oak-diner');
     const v = await newVisitor();
     await signInStaff(v.page, 'owner@oak-diner.test');
-    await v.page.goto(`${BASE()}/console?period=last_28_days&compare=previous_period`);
+    await v.page.goto(`${BASE()}/console/analytics/overview?period=last_28_days&compare=previous_period`);
 
     const net = Number(await v.page.getAttribute('[data-testid=kpi-tiles] [data-metric=net_sales]', 'data-value'));
     const orders = Number(await v.page.getAttribute('[data-testid=kpi-tiles] [data-metric=orders]', 'data-value'));
@@ -69,7 +69,7 @@ describe('console analytics: numbers that trace to the ledger', () => {
   it('every analytics screen opens cleanly, charts switch to their table, and caveats are on the page', async () => {
     const v = await newVisitor();
     await signInStaff(v.page, 'owner@oak-diner.test');
-    for (const p of ['/console', '/console/analytics', '/console/analytics/menu?by=category', '/console/analytics/customers', '/console/analytics/marketing?by=creator', '/console/analytics/views', '/console/analytics/benchmarks', '/console/analytics/digest', '/console/analytics/dictionary', '/console/analytics/settings']) {
+    for (const p of ['/console', '/console/analytics', '/console/analytics/overview', '/console/analytics/menu?by=category', '/console/analytics/customers', '/console/analytics/marketing?by=creator', '/console/analytics/views', '/console/analytics/benchmarks', '/console/analytics/digest', '/console/analytics/dictionary', '/console/analytics/settings']) {
       const res = await v.page.goto(`${BASE()}${p}`);
       expect(res?.status(), p).toBe(200);
       expect(await v.page.locator('h1').count(), p).toBeGreaterThan(0);
@@ -78,7 +78,7 @@ describe('console analytics: numbers that trace to the ledger', () => {
     const chart = v.page.locator('figure', { hasText: 'Net sales' }).first();
     await chart.getByRole('button', { name: 'Show table' }).click();
     expect(await chart.locator('tbody tr').count()).toBeGreaterThan(0);
-    await v.page.goto(`${BASE()}/console`);
+    await v.page.goto(`${BASE()}/console/analytics/overview`);
     expect(await v.page.locator('details', { hasText: 'Read these numbers with this in mind' }).count()).toBeGreaterThan(0);
     expect(v.problems).toEqual([]);
     await v.context.close();
@@ -118,7 +118,7 @@ describe('console analytics: numbers that trace to the ledger', () => {
     const audit = await db().selectFrom('audit_log').select('action').where('entity_id', '=', row.id).execute();
     expect(audit.map((a) => a.action)).toContain('analytics.view_saved');
 
-    await v.page.goto(`${BASE()}/console`);
+    await v.page.goto(`${BASE()}/console/analytics/overview`);
     expect(await v.page.locator('[data-testid=pinned-view]', { hasText: name }).count()).toBe(1);
 
     // Tidy up through the UI: delete asks first and says nothing but the view goes.

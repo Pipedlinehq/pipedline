@@ -3,10 +3,20 @@ import { defineEvent, defineModule } from '@ros/core';
 
 export const commsModule = defineModule({
   key: 'comms',
-  name: 'Comms',
+  name: 'Messages',
   description: 'The outbox: email and SMS, templates, sending identities, suppression, delivery events.',
   spine: true,
   dependsOn: ['identity'],
+  manifest: {
+    name: 'Messages',
+    purpose: 'Every email and text the venue sends, through one outbox that checks consent, opt-outs and quiet hours before anything goes, and records whether it arrived.',
+    category: 'marketing',
+    kind: 'module',
+    needs: ['Nothing to start: receipts and confirmations send from a Pipedline address. A sending address of the venue\'s own, and a text-message sender, can be added later.'],
+    reads: ['guest contact details and consents'],
+    writes: ['messages sent and whether they were delivered, opened or bounced', 'opt-outs'],
+    consent: 'Marketing goes only to guests who said yes, and every marketing message carries a way to opt out. Texts are never sent in the quiet hours.',
+  },
   tables: ['messages', 'message_events', 'sending_identities', 'suppressions', 'templates', 'esp_sync_state', 'esp_sync_profiles', 'ad_conversions'],
   configSchema: z.object({}),
   configVersion: 1,

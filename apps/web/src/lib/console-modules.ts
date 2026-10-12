@@ -1,7 +1,7 @@
 import 'server-only';
 import { cache } from 'react';
 import { getModule, type ModuleDef } from '@ros/core';
-import { campaigns, delivery, hub, loyalty, offers, ordering, qr, reviews, website } from '@ros/modules';
+import { bookings, campaigns, delivery, guestPlugin, hub, loyalty, offers, ordering, qr, reviews, website } from '@ros/modules';
 import { inConsole } from './console';
 
 /** The toggleable modules whose surfaces appear in the console, by key. */
@@ -9,12 +9,14 @@ export const CONSOLE_MODULES = {
   ordering: ordering.orderingModule,
   delivery: delivery.deliveryModule,
   qr: qr.qrModule,
+  bookings: bookings.bookingsModule,
   loyalty: loyalty.loyaltyModule,
   offers: offers.offersModule,
   website: website.websiteModule,
   hub: hub.hubModule,
   campaigns: campaigns.campaignsModule,
   reviews: reviews.reviewsModule,
+  guestPlugin: guestPlugin.guestPluginModule,
 } satisfies Record<string, ModuleDef<any>>;
 
 export type ConsoleModuleKey = keyof typeof CONSOLE_MODULES;

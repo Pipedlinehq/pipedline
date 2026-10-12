@@ -1,21 +1,23 @@
 import type { ReactNode } from 'react';
 import { cx } from './format';
 
-export function PageHeader({ title, description, actions }: { title: string; description?: ReactNode; actions?: ReactNode }) {
+/** The page title, set in the display face; everything under it is text type. */
+export function PageHeader({ title, description, actions, eyebrow }: { title: string; description?: ReactNode; actions?: ReactNode; eyebrow?: ReactNode }) {
   return (
     <header className="mb-6 flex flex-wrap items-start justify-between gap-4">
       <div className="min-w-0">
-        <h1 className="text-2xl font-semibold tracking-tight text-ink">{title}</h1>
-        {description ? <p className="mt-1 max-w-2xl text-sm text-ink-2">{description}</p> : null}
+        {eyebrow ? <p className="mb-1 text-xs font-medium uppercase tracking-[0.08em] text-ink-3">{eyebrow}</p> : null}
+        <h1 className="font-display text-[1.75rem] font-medium leading-tight text-ink md:text-[2rem]">{title}</h1>
+        {description ? <p className="mt-1.5 max-w-2xl text-sm leading-relaxed text-ink-2">{description}</p> : null}
       </div>
       {actions ? <div className="flex shrink-0 flex-wrap items-center gap-2">{actions}</div> : null}
     </header>
   );
 }
 
-export function Card({ title, description, actions, children, className, padded = true }: { title?: string; description?: ReactNode; actions?: ReactNode; children: ReactNode; className?: string; padded?: boolean }) {
+export function Card({ title, description, actions, children, className, padded = true, id }: { title?: string; description?: ReactNode; actions?: ReactNode; children: ReactNode; className?: string; padded?: boolean; id?: string }) {
   return (
-    <section className={cx('rounded-lg border border-line bg-surface', className)}>
+    <section id={id} className={cx('rounded-card border border-line bg-surface', className)}>
       {title || actions ? (
         <div className="flex flex-wrap items-start justify-between gap-3 border-b border-line px-5 py-4">
           <div>
@@ -46,7 +48,7 @@ export function Badge({ tone = 'neutral', children }: { tone?: Tone; children: R
 
 export function EmptyState({ title, children, action }: { title: string; children?: ReactNode; action?: ReactNode }) {
   return (
-    <div className="rounded-lg border border-dashed border-line-strong px-6 py-10 text-center">
+    <div className="rounded-card border border-dashed border-line-strong px-6 py-10 text-center">
       <p className="text-base font-medium text-ink">{title}</p>
       {children ? <p className="mx-auto mt-1 max-w-md text-sm text-ink-2">{children}</p> : null}
       {action ? <div className="mt-4 flex justify-center">{action}</div> : null}

@@ -23,7 +23,7 @@ export default async function LoyaltySummaryPage({ searchParams }: { searchParam
       <nav aria-label="Period" className="mb-4 flex flex-wrap items-center gap-2 text-sm">
         <span className="text-ink-2">Period:</span>
         {DAYS.map((d) => (
-          <Link key={d} href={`/console/loyalty?days=${d}`} aria-current={d === days ? 'page' : undefined} className={`rounded-md px-2.5 py-1 ${d === days ? 'bg-ink text-white' : 'text-ink-2 hover:bg-sunken'}`}>
+          <Link key={d} href={`/console/loyalty?days=${d}`} aria-current={d === days ? 'page' : undefined} className={`rounded-md px-2.5 py-1 ${d === days ? 'bg-ink text-page' : 'text-ink-2 hover:bg-sunken'}`}>
             Last {d} days
           </Link>
         ))}

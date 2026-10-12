@@ -212,6 +212,13 @@ describe('onboarding, from sold to live', () => {
     // The owner signs in to the console for the first time (accepting the invitation) …
     const ownerBrowser = await newVisitor();
     await signInStaff(ownerBrowser.page, OWNER);
+    // … and Home shows setup progress with the next step, since the venue is not live yet.
+    await ownerBrowser.page.goto(`${BASE()}/console`);
+    const setup = ownerBrowser.page.getByTestId('setup-progress');
+    await setup.waitFor();
+    expect(await setup.innerText()).toMatch(/of \d+ steps done/);
+    expect(await ownerBrowser.page.getByTestId('setup-next').innerText()).toMatch(/^Next: /);
+    expect(ownerBrowser.problems).toEqual([]);
     await ownerBrowser.context.close();
     // … enters a menu, confirms it and the hours, and sends the test email: console functions, called as the owner.
     const owner = await staffAs(OWNER, SLUG);

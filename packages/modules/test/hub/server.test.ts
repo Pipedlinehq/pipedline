@@ -12,6 +12,7 @@ const demoModule = defineModule({
   name: 'Hub demo',
   description: 'test-only module',
   dependsOn: [],
+  manifest: { name: 'Hub demo', purpose: 'test-only module', category: 'setup', kind: 'module', needs: ['nothing'], reads: ['nothing'], writes: ['nothing'] },
   tables: [],
   configSchema: z.object({}),
   configVersion: 1,

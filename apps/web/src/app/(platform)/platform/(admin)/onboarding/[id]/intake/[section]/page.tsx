@@ -54,7 +54,7 @@ export default async function IntakeSectionPage({ params }: { params: Promise<{ 
             key={s.key}
             href={`/platform/onboarding/${id}/intake/${s.key}`}
             aria-current={s.key === def.key ? 'page' : undefined}
-            className={`rounded-md border px-2 py-1 text-xs ${s.key === def.key ? 'border-ink bg-ink text-white' : 'border-line text-ink-2 hover:bg-sunken'}`}
+            className={`rounded-md border px-2 py-1 text-xs ${s.key === def.key ? 'border-ink bg-ink text-page' : 'border-line text-ink-2 hover:bg-sunken'}`}
           >
             {s.status === 'complete' ? '✓ ' : s.status === 'in_progress' ? '… ' : ''}
             {s.label}

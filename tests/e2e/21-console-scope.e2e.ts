@@ -18,7 +18,7 @@ describe('console scope: people see only their venues, and read-only people chan
 
     // The venue selector and the analytics filter offer only their own venues.
     expect(await v.page.$$eval('#venue-select option', (o) => o.map((x) => x.textContent))).toEqual(['Oak Group CBD', 'Oak Group Newtown']);
-    await v.page.goto(`${BASE()}/console?venue=all`);
+    await v.page.goto(`${BASE()}/console/analytics/overview?venue=all`);
     const venueOptions = await v.page.$$eval('form[role=search] select[name=venue] option', (o) => o.map((x) => x.textContent ?? ''));
     expect(venueOptions.join('|')).not.toContain('Bondi');
 
@@ -28,7 +28,7 @@ describe('console scope: people see only their venues, and read-only people chan
     expect(prov).not.toContain('Bondi');
 
     // Asking for the third venue by URL is ignored, and a cookie naming it cannot widen access.
-    await v.page.goto(`${BASE()}/console?venue=${bondi.id}`);
+    await v.page.goto(`${BASE()}/console/analytics/overview?venue=${bondi.id}`);
     expect(await v.page.locator('[data-testid=kpi-tiles] ~ [data-testid=provenance]').first().innerText()).not.toContain('Bondi');
     await v.context.addCookies([{ name: 'ros_venue', value: bondi.id, url: `${BASE()}/console` }]);
     await v.page.goto(`${BASE()}/console`);
@@ -57,7 +57,7 @@ describe('console scope: people see only their venues, and read-only people chan
 
   it('the read-only role is shown no way to change anything, and a change sent anyway is refused', async () => {
     const group = await orgBySlug('oak-group');
-    const pages = ['/console', '/console/orders', '/console/loyalty', '/console/offers', '/console/menu', '/console/qr', '/console/analytics', '/console/analytics/views', '/console/analytics/digest'];
+    const pages = ['/console', '/console/orders', '/console/loyalty', '/console/offers', '/console/menu', '/console/qr', '/console/analytics', '/console/analytics/overview', '/console/analytics/views', '/console/analytics/digest'];
     const auditBefore = await db().selectFrom('audit_log').select((eb) => eb.fn.max('occurred_at').as('at')).where('org_id', '=', group.orgId).executeTakeFirstOrThrow();
 
     const ro = await newVisitor();
@@ -69,8 +69,8 @@ describe('console scope: people see only their venues, and read-only people chan
       const writable = await ro.page.locator('main form:not([method=get]) :is(input[type=text], input:not([type]), input[type=number], textarea, select):visible').evaluateAll((els) => els.map((e) => (e as HTMLInputElement).name));
       expect(writable, p).toEqual([]);
     }
-    // The settings screens are not in their navigation.
-    expect(await ro.page.locator('nav[aria-label=Console] a', { hasText: 'Team' }).count()).toBe(0);
+    // The settings screens, the catalogue and the assistant are not in their navigation.
+    for (const label of ['Settings', 'Plugins', 'Channels', 'Assistant', 'Marketing']) expect(await ro.page.locator('nav[aria-label=Console] > div > a', { hasText: label }).count(), label).toBe(0);
 
     // A manager's real "pin this view" request, replayed with the read-only person's session.
     const mgr = await newVisitor();

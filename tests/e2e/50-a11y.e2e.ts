@@ -104,6 +104,11 @@ describe('accessibility: no serious or critical axe violations', () => {
     await signInStaff(v.page, 'manager@oak-diner.test');
     const paths = [
       '/console',
+      '/console/bookings',
+      '/console/bookings/settings',
+      '/console/channels',
+      '/console/plugins',
+      '/console/assistant',
       '/console/orders',
       '/console/orders?view=all',
       '/console/orders?view=attention',
@@ -140,6 +145,7 @@ describe('accessibility: no serious or critical axe violations', () => {
       '/console/website/settings',
       '/console/hours',
       '/console/analytics',
+      '/console/analytics/overview',
       '/console/analytics/marketing',
       '/console/analytics/menu',
       '/console/analytics/customers',
@@ -163,13 +169,16 @@ describe('accessibility: no serious or critical axe violations', () => {
     await v.page.locator('[data-testid^=switch-off-]').first().click();
     await v.page.waitForSelector('dialog[open]');
     findings.push(...(await audit(v.page, '/console/settings/features, confirmation dialog')));
-    // And at phone width, where the navigation stacks above the page.
+    // And at phone width, where the navigation becomes a bar along the bottom; then the "More" sheet.
     await v.page.setViewportSize({ width: 390, height: 844 });
-    for (const path of ['/console', '/console/orders', '/console/menu', '/console/delivery']) {
+    for (const path of ['/console', '/console/orders', '/console/bookings', '/console/menu', '/console/delivery']) {
       await v.page.goto(`${BASE()}${path}`);
       await v.page.waitForLoadState('networkidle');
       findings.push(...(await audit(v.page, `${path} (phone)`)));
     }
+    await v.page.locator('nav[aria-label="Main sections"]').getByRole('button', { name: 'More' }).click();
+    await v.page.waitForSelector('dialog[open]');
+    findings.push(...(await audit(v.page, '/console, phone "More" sheet')));
     expect(v.problems).toEqual([]);
     await v.context.close();
 
@@ -177,7 +186,7 @@ describe('accessibility: no serious or critical axe violations', () => {
     await signInStaff(owner.page, 'owner@oak-group.test');
     await owner.page.goto(`${BASE()}/console`);
     await chooseVenue(owner.page, 'Oak Group CBD');
-    for (const path of ['/console/settings/privacy', '/console/settings/connections', '/console/settings/assistants', '/console/delivery', '/console/campaigns/flows', '/console/analytics/benchmarks', '/console/analytics/settings', '/console/reviews/listings', '/console/reviews/settings', '/console/campaigns/settings']) {
+    for (const path of ['/console/settings/privacy', '/console/settings/connections', '/console/assistant', '/console/channels', '/console/plugins', '/console/delivery', '/console/campaigns/flows', '/console/analytics/benchmarks', '/console/analytics/settings', '/console/reviews/listings', '/console/reviews/settings', '/console/campaigns/settings']) {
       const res = await owner.page.goto(`${BASE()}${path}`);
       await owner.page.waitForLoadState('networkidle');
       if (res && res.status() >= 500) throw new Error(`${path} answered ${res.status()}`);

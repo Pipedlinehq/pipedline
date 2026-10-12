@@ -41,7 +41,7 @@ export default async function CustomersPage({ searchParams }: { searchParams: Pr
             className="block h-10 w-full rounded-md border border-line-strong bg-surface px-3 text-sm text-ink placeholder:text-ink-3"
           />
         </label>
-        <button type="submit" className="h-10 rounded-md bg-ink px-4 text-sm font-medium text-white hover:bg-ink/85">
+        <button type="submit" className="h-10 rounded-md bg-ink px-4 text-sm font-medium text-page hover:bg-ink/85">
           Search
         </button>
       </form>

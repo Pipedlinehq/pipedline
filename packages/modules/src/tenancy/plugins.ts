@@ -1,8 +1,12 @@
 import { z } from 'zod';
 import {
+  type CatalogueKind,
   type Ctx,
+  type ManifestCategory,
   type ModuleDef,
   type ModuleState,
+  type PlugDef,
+  type PublicAddressing,
   forbidden,
   getModule,
   getModuleDef,
@@ -17,6 +21,8 @@ import {
   requireStaff,
   setModule,
 } from '@ros/core';
+import { getPrimaryHost } from './domains';
+import { getVenue } from './venues';
 
 /**
  * Plugins as a venue sees them (docs/PIPEDLINE.md: "every capability is a plugin a venue
@@ -58,12 +64,25 @@ export interface PluginView {
   purpose: string;
   /** plugin = a module the venue switches on; built_in = always on; connection = a service the venue connects. */
   kind: 'plugin' | 'built_in' | 'connection';
+  /** From the manifest: a channel guests meet, a module inside the engine, or a plug (a connected service). */
+  catalogueKind: CatalogueKind;
+  /** Where it sits in the catalogue people see. */
+  category: ManifestCategory;
   on: boolean;
   canSwitch: boolean;
   /** False when its settings are changed only by a person in the console (the module that governs assistants). */
   assistantMayChange: boolean;
   /** What it needs before it is useful, in plain words. */
   needs: string[];
+  /** The data it reads and writes, in plain words (from the manifest). */
+  reads: string[];
+  writes: string[];
+  /** What it means for guests' consent, when it touches guests at all. */
+  consent: string | null;
+  /** For a channel: where guests reach it at this venue; null when there is no address yet. */
+  publicAddress: string | null;
+  /** The spec on GitHub, when the module has one. */
+  docs: string | null;
   settingsApplyTo: 'venue' | 'organisation' | 'none';
   settings: Record<string, unknown>;
   /** The settings described as JSON Schema, generated from the module's own zod schema. */
@@ -76,7 +95,13 @@ export interface PluginView {
 
 const isTestModule = (key: string) => key.startsWith('test_');
 
-function describeSchema(schema: z.ZodType): Record<string, unknown> {
+/** A spine module's org-level settings, when it registered them. */
+export function orgPluginSettingsOf(moduleKey: string): OrgPluginSettings | undefined {
+  return orgSettings.get(moduleKey);
+}
+
+/** A zod schema as JSON Schema (draft 2020-12, without the dialect line), with every `.describe()` text. */
+export function describeSchema(schema: z.ZodType): Record<string, unknown> {
   try {
     const { $schema: _dialect, ...rest } = z.toJSONSchema(schema, { io: 'input', unrepresentable: 'any' }) as Record<string, unknown>;
     return rest;
@@ -86,11 +111,12 @@ function describeSchema(schema: z.ZodType): Record<string, unknown> {
   }
 }
 
-const hasSettings = (schema: z.ZodType) => !(schema instanceof z.ZodObject) || Object.keys(schema.shape).length > 0;
+export const hasSettings = (schema: z.ZodType) => !(schema instanceof z.ZodObject) || Object.keys(schema.shape).length > 0;
 
-function needsOf(def: ModuleDef<unknown>): string[] {
+/** The manifest's `needs`, with "<module> switched on first" for each toggleable module it depends on. */
+export function needsOf(def: ModuleDef<unknown>): string[] {
   const deps = def.dependsOn.map((k) => getModuleDef(k)).filter((d) => !d.spine).map((d) => `${d.name} switched on first`);
-  return [...deps, ...(def.needs ?? [])];
+  return [...deps, ...def.manifest.needs];
 }
 
 const CONNECTS: Record<string, { by: PluginView['connectsBy']; need: (name: string) => string }> = {
@@ -99,46 +125,81 @@ const CONNECTS: Record<string, { by: PluginView['connectsBy']; need: (name: stri
   none: { by: 'nothing', need: () => 'Nothing: it is connected in the console.' },
 };
 
+/** How a venue connects a plug, in plain words. */
+export function connectHint(plug: PlugDef): string {
+  const how = CONNECTS[plug.auth]!.need(plug.name);
+  return plug.kind === 'mcp' ? `${how} Each venue then lists it under its assistant settings (enabled_plugs) before its tools are offered.` : how;
+}
+
+export const DOCS_BASE = 'https://github.com/Pipedlinehq/pipedline/blob/main/docs/modules/';
+
+/**
+ * Modules with a spec at docs/modules/<key>.md. Kept as a list, not a file read, so the catalogue
+ * can be served from a deployment that does not ship the docs; `pnpm check:manifests` fails when
+ * this list and the directory disagree.
+ */
+export const DOCUMENTED_MODULES: readonly string[] = ['bookings', 'comms', 'delivery', 'guest-plugin', 'hub', 'loyalty', 'ordering', 'qr', 'specials', 'website'];
+
+/** The spec's URL on GitHub, or null when the module has none. */
+export const docsOf = (key: string): string | null => (DOCUMENTED_MODULES.includes(key) ? `${DOCS_BASE}${key}.md` : null);
+
+/** What a plug reads and writes, as every plug is held to it (docs/PLUGINS.md section 5.4). */
+export const PLUG_READS = ['Nothing from the venue\'s records: the service sees only what the assistant sends it.'];
+export const PLUG_WRITES = ['Nothing in the venue\'s records. Changes it makes are in the service itself, after the person says yes.'];
+
 /** Every module and every plug, as they stand at one venue. Manager at the venue: settings are shown. */
 export async function listPlugins(ctx: Ctx, venueId: string): Promise<PluginView[]> {
   requireStaff(ctx, { venueId, minRole: 'manager' });
+  const venue = await getVenue(ctx, venueId);
+  const host = await getPrimaryHost(ctx, venue.id);
+  const at: PublicAddressing = {
+    platformOrigin: `${ctx.app.config.scheme}://${ctx.app.config.platformHost}`,
+    siteOrigin: host ? `${ctx.app.config.scheme}://${host}` : null,
+    venue: { id: venue.id, slug: venue.slug, name: venue.name },
+  };
   const out: PluginView[] = [];
   for (const def of listModuleDefs()) {
     if (isTestModule(def.key)) continue;
+    const m = def.manifest;
     const org = orgSettings.get(def.key);
+    const fromManifest = {
+      key: def.key,
+      name: m.name,
+      purpose: m.purpose,
+      catalogueKind: m.kind,
+      category: m.category,
+      needs: needsOf(def),
+      reads: [...m.reads],
+      writes: [...m.writes],
+      consent: m.consent ?? null,
+      publicAddress: m.publicAddress?.(at) ?? null,
+      docs: docsOf(def.key),
+      connectsBy: null,
+      canBeGranted: [],
+    };
     if (def.spine) {
       out.push({
-        key: def.key,
-        name: def.name,
-        purpose: def.description,
+        ...fromManifest,
         kind: 'built_in',
         on: true,
         canSwitch: false,
         assistantMayChange: !!org && def.assistantConfigurable !== false,
-        needs: needsOf(def),
         settingsApplyTo: org ? 'organisation' : 'none',
         settings: org ? await org.get(ctx) : {},
         settingsSchema: org ? describeSchema(org.schema) : {},
-        connectsBy: null,
-        canBeGranted: [],
       });
       continue;
     }
     const state = await getModule(ctx, venueId, def);
     out.push({
-      key: def.key,
-      name: def.name,
-      purpose: def.description,
+      ...fromManifest,
       kind: 'plugin',
       on: state.enabled,
       canSwitch: true,
       assistantMayChange: def.assistantConfigurable !== false,
-      needs: needsOf(def),
       settingsApplyTo: hasSettings(def.configSchema) ? 'venue' : 'none',
       settings: (state.config ?? {}) as Record<string, unknown>,
       settingsSchema: describeSchema(def.configSchema),
-      connectsBy: null,
-      canBeGranted: [],
     });
   }
   const live = (await listConnections(ctx, { venueId })).filter((c) => c.status === 'connected' || c.status === 'unhealthy');
@@ -150,10 +211,17 @@ export async function listPlugins(ctx: Ctx, venueId: string): Promise<PluginView
       name: plug.name,
       purpose: plug.description,
       kind: 'connection',
+      catalogueKind: 'plug',
+      category: 'integration',
       on: live.some((c) => c.plug_key === plug.key),
       canSwitch: false,
       assistantMayChange: false,
-      needs: [how.need(plug.name)],
+      needs: [connectHint(plug)],
+      reads: [...PLUG_READS],
+      writes: [...PLUG_WRITES],
+      consent: null,
+      publicAddress: null,
+      docs: null,
       settingsApplyTo: 'none',
       settings: {},
       settingsSchema: {},
@@ -240,11 +308,11 @@ export async function planPluginChange(ctx: Ctx, raw: PluginChangeInput, want: '
     const current = await org.get(ctx);
     const { patch, changes } = checkedPatch(def.name, org.schema, current, input.config);
     if (!changes.length) throw invalid(`Nothing would change: ${def.name} already has those settings.`);
-    return { key: def.key, name: def.name, purpose: def.description, on: true, settingsApplyTo: 'organisation', changes, apply: async () => ({ on: true, settings: await org.set(ctx, patch) }) };
+    return { key: def.key, name: def.name, purpose: def.manifest.purpose, on: true, settingsApplyTo: 'organisation', changes, apply: async () => ({ on: true, settings: await org.set(ctx, patch) }) };
   }
 
   const before = (await getModule(ctx, input.venueId, def)) as ModuleState<Record<string, unknown>>;
-  const plan = (changes: string[], apply: PluginChange['apply']): PluginChange => ({ key: def.key, name: def.name, purpose: def.description, on: before.enabled, settingsApplyTo: 'venue', changes, apply });
+  const plan = (changes: string[], apply: PluginChange['apply']): PluginChange => ({ key: def.key, name: def.name, purpose: def.manifest.purpose, on: before.enabled, settingsApplyTo: 'venue', changes, apply });
 
   if (want === 'disable') {
     if (!before.enabled) throw invalid(`${def.name} is already switched off here.`);

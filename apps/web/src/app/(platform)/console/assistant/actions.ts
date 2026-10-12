@@ -26,13 +26,13 @@ export async function createKey(_prev: DataFormState<Made>, fd: FormData): Promi
       });
       return { key: made.key, name: made.view.name, expiresAt: dateTime(made.view.expiresAt, c.venue.timezone, { date: true, time: false }) };
     },
-    { revalidate: '/console/settings/assistants' },
+    { revalidate: '/console/assistant' },
   );
 }
 
 export async function revokeKey(_prev: FormState, fd: FormData): Promise<FormState> {
   const id = text(fd, 'keyId');
-  return act((ctx) => hub.revokeAgentKey(ctx, id), { success: 'Key revoked. Any assistant using it is cut off now.', revalidate: '/console/settings/assistants' });
+  return act((ctx) => hub.revokeAgentKey(ctx, id), { success: 'Key revoked. Any assistant using it is cut off now.', revalidate: '/console/assistant' });
 }
 
 export async function setKeyCanWrite(_prev: FormState, fd: FormData): Promise<FormState> {
@@ -40,6 +40,6 @@ export async function setKeyCanWrite(_prev: FormState, fd: FormData): Promise<Fo
   const canWrite = text(fd, 'canWrite') === 'true';
   return act((ctx) => hub.setAgentKeyCanWrite(ctx, id, canWrite), {
     success: canWrite ? 'This key may now propose changes. Each one still waits for its person to say yes.' : 'This key can read only.',
-    revalidate: '/console/settings/assistants',
+    revalidate: '/console/assistant',
   });
 }

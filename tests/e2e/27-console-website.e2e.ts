@@ -100,7 +100,8 @@ describe('console: website', () => {
   it('front-of-house staff do not get the website editor', async () => {
     const v = await newVisitor();
     await signInStaff(v.page, 'host@oak-diner.test');
-    expect(await v.page.getByRole('link', { name: 'Website' }).count()).toBe(0);
+    // The Website section may still be in their navigation (for QR codes); the editor itself is not.
+    expect(await v.page.locator('a[href="/console/website"]').count()).toBe(0);
     await v.page.goto(`${BASE()}/console/website`);
     await v.page.getByText('Your role does not include this').waitFor();
     expect(v.problems).toEqual([]);

@@ -71,7 +71,7 @@ export function ConfirmAction({
       <Button type="button" variant={triggerVariant} size={triggerSize} onClick={() => ref.current?.showModal()} data-testid={testId}>
         {trigger}
       </Button>
-      <dialog ref={ref} aria-label={title} className="m-auto w-[min(32rem,calc(100vw-2rem))] rounded-lg border border-line bg-surface p-0 text-ink">
+      <dialog ref={ref} aria-label={title} className="m-auto w-[min(32rem,calc(100vw-2rem))] rounded-card border border-line bg-surface p-0 text-ink shadow-xl">
         <div className="flex items-center justify-between border-b border-line px-5 py-4">
           <h2 className="text-base font-semibold">{title}</h2>
           <button type="button" onClick={() => ref.current?.close()} aria-label="Close" className="rounded-md px-2 py-1 text-ink-2 hover:bg-sunken">

@@ -10,27 +10,65 @@ const SALE_CHANNELS = ['dine-in', 'pickup', 'delivery', 'catering', 'retail'] as
  */
 export const loyaltyConfig = z.object({
   /** Sales at this venue earn points. */
-  earnHere: z.boolean().default(true),
+  earnHere: z.boolean().default(true).describe('Whether sales at this venue earn points. Default on.'),
   /** Which kinds of sale earn. */
-  earnChannels: z.array(z.enum(SALE_CHANNELS)).default([...SALE_CHANNELS]),
+  earnChannels: z
+    .array(z.enum(SALE_CHANNELS).describe('One kind of sale: dine-in, pickup, delivery, catering or retail.'))
+    .default([...SALE_CHANNELS])
+    .describe('Which kinds of sale earn points here: dine-in, pickup, delivery, catering and retail. Default: all of them.'),
   /** A sale made this many hours before the guest joined still earns (pay first, join at the counter after). */
-  earnLookbackHours: z.number().int().min(0).max(720).default(24),
+  earnLookbackHours: z
+    .number()
+    .int()
+    .min(0)
+    .max(720)
+    .default(24)
+    .describe('A sale made up to this many hours before a guest joined still earns them points, so someone who pays first and joins at the counter afterwards is not short-changed. 0: only sales after joining. Default 24.'),
   /** Rewards can be redeemed at this venue. */
-  redeemHere: z.boolean().default(true),
+  redeemHere: z.boolean().default(true).describe('Whether rewards can be used at this venue. Default on.'),
   /** How long a counter redemption code stays usable. */
-  redemptionExpiryMinutes: z.number().int().min(2).max(240).default(15),
+  redemptionExpiryMinutes: z
+    .number()
+    .int()
+    .min(2)
+    .max(240)
+    .default(15)
+    .describe('How long a reward code issued at the counter stays usable, in minutes. If no sale matches it in time, the points go back to the member. Default 15.'),
   /** How long after a code lapses we keep waiting for a sale that was made in time but reported late. */
-  lateSaleGraceMinutes: z.number().int().min(0).max(120).default(10),
+  lateSaleGraceMinutes: z
+    .number()
+    .int()
+    .min(0)
+    .max(120)
+    .default(10)
+    .describe('After a counter code lapses, how many more minutes to keep waiting for a sale that was rung up in time but reached Pipedline late from the till. Default 10.'),
   /** When the till sale carries no code, match a redemption by venue, time window and discount amount. */
-  matchByAmount: z.boolean().default(true),
+  matchByAmount: z
+    .boolean()
+    .default(true)
+    .describe('When a till sale carries no reward code, match it to a code issued at this venue by when it was issued and the discount amount. Default on.'),
   /** A manager may confirm a redemption whose sale never arrived. When off, only an owner may. */
-  allowStaffForceConfirm: z.boolean().default(true),
+  allowStaffForceConfirm: z
+    .boolean()
+    .default(true)
+    .describe('Whether a manager may confirm a reward whose till sale never arrived. Off: only an owner may. Default on.'),
   /** How staff may find a guest at the counter. */
-  identifyBy: z.array(z.enum(['phone', 'email', 'qr', 'name'])).default(['phone', 'email', 'qr', 'name']),
+  identifyBy: z
+    .array(z.enum(['phone', 'email', 'qr', 'name']).describe('One way of looking a member up: phone, email, qr or name.'))
+    .default(['phone', 'email', 'qr', 'name'])
+    .describe('How staff may look a member up at the counter: "phone", "email", "qr" (scanning the member\'s own code) and "name". Default: all four.'),
   /** Staff may enrol a guest at the counter with the guest's phone or email. */
-  counterEnrolment: z.boolean().default(true),
+  counterEnrolment: z
+    .boolean()
+    .default(true)
+    .describe('Whether staff may sign a guest up at the counter with the guest\'s phone number or email. Joining is not a yes to marketing. Default on.'),
   /** A manual points adjustment larger than this needs an owner. */
-  ownerAdjustmentAbovePoints: z.number().int().min(0).default(500),
+  ownerAdjustmentAbovePoints: z
+    .number()
+    .int()
+    .min(0)
+    .default(500)
+    .describe('A points correction by hand bigger than this, added or removed, needs an owner; a manager may make smaller ones. Default 500.'),
 });
 export type LoyaltyConfig = z.infer<typeof loyaltyConfig>;
 
@@ -39,6 +77,16 @@ export const loyaltyModule = defineModule({
   name: 'Loyalty',
   description: 'Org-wide points ledger, tiers, rewards and counter redemption.',
   dependsOn: ['identity', 'ledger', 'comms'],
+  manifest: {
+    name: 'Loyalty',
+    purpose: 'A points programme shared across the venue\'s sites: guests earn on what they spend, move up tiers, and redeem rewards at the counter or online. Points are earned from the sales record, so nothing extra is needed at the till.',
+    category: 'guests',
+    kind: 'module',
+    needs: ['Sales arriving (a till connected or Online ordering on), so points can be earned'],
+    reads: ['sales', 'guest records'],
+    writes: ['points, tiers and rewards', 'redemptions', 'reward and tier messages to members'],
+    consent: 'A guest joins the programme themself, online or by asking at the counter. Joining is not a yes to marketing; that is asked separately.',
+  },
   tables: ['loyalty_programs', 'loyalty_tiers', 'loyalty_accounts', 'loyalty_transactions', 'rewards', 'redemptions'],
   configSchema: loyaltyConfig,
   configVersion: 1,

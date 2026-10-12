@@ -3,10 +3,19 @@ import { defineEvent, defineModule } from '@ros/core';
 
 export const eventsModule = defineModule({
   key: 'events',
-  name: 'Events',
+  name: 'Activity stream',
   description: 'The first-party analytics stream: visitor sessions and everything guests and systems do.',
   spine: true,
   dependsOn: [],
+  manifest: {
+    name: 'Activity stream',
+    purpose: 'What happens on the venue\'s site and QR menu (visits, menu views, orders started) and what the venue\'s own systems do, recorded as the venue\'s own data rather than a third party\'s.',
+    category: 'insight',
+    kind: 'module',
+    needs: ['Nothing: it runs for every venue.'],
+    reads: ['visits to the site and the QR menu'],
+    writes: ['the activity stream', 'visitor sessions'],
+  },
   tables: ['events', 'visitor_sessions'],
   configSchema: z.object({}),
   configVersion: 1,

@@ -40,11 +40,17 @@ export const guestPluginModule = defineModule({
   description:
     'Lists the venue on Pipedline\'s public assistant connection, so a guest using ChatGPT or Claude can find it, read the menu and hours, book a table and start a pickup order. Payment always happens on the venue\'s own order page. Alcohol is never orderable this way.',
   dependsOn: [],
-  needs: [
-    'The venue marked live.',
-    'Table bookings switched on, for bookings.',
-    'Online ordering switched on with pickup, and the website, for orders.',
-  ],
+  manifest: {
+    name: 'Guests\' assistants',
+    purpose: 'The venue inside other people\'s assistants: a guest using ChatGPT or Claude can find the venue, read the menu and hours, book a table and start a pickup order. Payment always happens on the venue\'s own order page; in Australia no payment is taken inside the chat.',
+    category: 'channels',
+    kind: 'channel',
+    needs: ['The venue marked live.', 'Table bookings switched on, for bookings.', 'Online ordering switched on with pickup, and the website, for orders.'],
+    reads: ['venue details and opening hours', 'the menu', 'booking and pickup times'],
+    writes: ['booking requests', 'pickup carts handed to the venue\'s order page (nothing is ordered until the guest pays there)'],
+    consent: 'A guest\'s assistant sees only what the venue shows every visitor. A booking made this way is a booking, not a yes to marketing.',
+    publicAddress: ({ platformOrigin }) => `${platformOrigin}/api/guest/mcp`,
+  },
   tables: [],
   configSchema: guestPluginConfig,
   configVersion: 1,

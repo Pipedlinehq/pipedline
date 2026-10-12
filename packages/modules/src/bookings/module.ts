@@ -141,7 +141,17 @@ export const bookingsModule = defineModule({
   description:
     'Guests book a table for a time and party size on the venue\'s site or through an assistant; staff confirm, seat and manage bookings. Capacity is counted in guests per time slot and per service, without a floor plan.',
   dependsOn: [],
-  needs: ['Opening hours, or service times set in the bookings settings. A booking page for guests needs the Website switched on.'],
+  manifest: {
+    name: 'Table bookings',
+    purpose: 'Guests book a table for a time and party size on the venue\'s site or through an assistant; staff confirm, seat and manage bookings. Capacity is counted in covers per time slot and per service, with no floor plan to draw.',
+    category: 'channels',
+    kind: 'channel',
+    needs: ['Opening hours, or service times set in the bookings settings. A booking page for guests needs the Website switched on.'],
+    reads: ['opening hours and closed days', 'guest records (a guest who books is recorded)'],
+    writes: ['bookings and their status', 'confirmation and reminder messages'],
+    consent: 'A booking never adds a guest to a marketing list.',
+    publicAddress: ({ siteOrigin }) => siteOrigin,
+  },
   tables: ['bookings', 'booking_status_history'],
   configSchema: bookingsConfig,
   configVersion: 1,

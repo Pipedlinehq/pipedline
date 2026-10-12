@@ -113,7 +113,7 @@ describe('console: connecting an assistant by sign-in', () => {
     expect(caller.principal.canWrite).toBe(true);
 
     // It is listed, by name, where the owner can end it.
-    await v.page.goto(`${BASE()}/console/settings/assistants`);
+    await v.page.goto(`${BASE()}/console/assistant`);
     expect(await v.page.locator('main').innerText()).toContain(name);
     expect(v.problems).toEqual([]);
     await v.context.close();

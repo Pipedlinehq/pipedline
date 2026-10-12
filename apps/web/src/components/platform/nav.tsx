@@ -18,7 +18,7 @@ export function PlatformNav() {
       {ITEMS.map((i) => {
         const active = i.href === '/platform' ? path === '/platform' : path.startsWith(i.href);
         return (
-          <Link key={i.href} href={i.href} aria-current={active ? 'page' : undefined} className={cx('rounded-md px-3 py-1.5 text-sm font-medium', active ? 'bg-ink text-white' : 'text-ink-2 hover:bg-sunken hover:text-ink')}>
+          <Link key={i.href} href={i.href} aria-current={active ? 'page' : undefined} className={cx('rounded-md px-3 py-1.5 text-sm font-medium', active ? 'bg-ink text-page' : 'text-ink-2 hover:bg-sunken hover:text-ink')}>
             {i.label}
           </Link>
         );

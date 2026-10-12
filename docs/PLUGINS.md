@@ -1,7 +1,8 @@
 # PLUGINS — how to write a plugin
 
 For a developer who has never seen this repository. Everything here describes the code as it
-stands on 2026-10-02. Section 7 lists what does not exist yet. Read it before you plan anything.
+stands on 2026-10-12 (the manifest and the public catalogue were added that day). Section 7 lists
+what does not exist yet. Read it before you plan anything.
 
 The worked example is a real module in this repository: `specials`, a venue's specials board.
 The code excerpts below are from its files (shortened where the text says so), and every
@@ -80,7 +81,7 @@ means nothing automatic catches it: a reviewer looks for the test.
 | 12 | Audit every change a venue could dispute. | The audit log is the venue's record of who did what. | Your tests. |
 | 13 | Guest-written text is untrusted. Render it as text. Label it when returning it to an assistant. | It can carry instructions aimed at the assistant. | Your tests. |
 
-### What the two gates check, exactly
+### What the three gates check, exactly
 
 **`pnpm check:modules`** (`scripts/check-module-boundaries.ts`)
 
@@ -104,7 +105,16 @@ table name held in a variable is not seen. A reviewer checks for that.
 - Files named `*.test.ts` are exempt. A line carrying the comment `tenant-branching-ok:` (or the
   line after one) is exempt; a reviewer will ask why.
 
-**`pnpm gates`** runs typecheck, both gates and every test with strict seeders. It must pass.
+**`pnpm check:manifests`** (`scripts/check-manifests.ts`)
+
+- Every module has a `manifest` that passes its schema: no empty `name`, `purpose`, `needs`,
+  `reads` or `writes`; the manifest's `name` is the module's `name`.
+- No banned word in any of its text: "SKU", "merchant", "fulfilment"/"fulfillment", "inventory".
+- `website`, `qr`, `ordering`, `delivery`, `bookings` and `guest-plugin` say `kind: 'channel'`
+  and have a `publicAddress`; nothing else says `channel`; a spine module says `module`.
+- `DOCUMENTED_MODULES` (what the catalogue links to) matches the files in `docs/modules/`.
+
+**`pnpm gates`** runs typecheck, the three gates and every test with strict seeders. It must pass.
 
 ### Migration rules
 
@@ -229,7 +239,15 @@ export const specialsModule = defineModule({
   name: 'Specials board',
   description: 'Daily or weekly specials a manager posts with a name, a price and the days they run. Guests see the ones running today.',
   dependsOn: [],
-  needs: ['Nothing to connect. A page that shows the specials to guests needs the Website or the QR menu switched on.'],
+  manifest: {
+    name: 'Specials board',
+    purpose: 'Daily or weekly specials a manager posts with a name, a price and the days they run. Guests see the ones running today.',
+    category: 'selling',
+    kind: 'module',
+    needs: ['Nothing to connect. A page that shows the specials to guests needs the Website or the QR menu switched on.'],
+    reads: ['the specials board'],
+    writes: ['specials posted and taken down'],
+  },
   tables: ['specials'],
   configSchema: specialsConfig,
   configVersion: 1,
@@ -243,7 +261,7 @@ The fields of `defineModule` (`packages/core/src/modules.ts`):
 - `name` and `description` are shown to owners and to assistants. Write them for a venue owner.
 - `dependsOn` lists module keys that must be on first. `setModule` refuses to switch yours on
   without them and `assertModule` checks them on every call. Keep it empty if you can.
-- `needs` is plain words for what a venue must have before the module is useful.
+- `manifest` is what every catalogue shows about the module (next heading). Required.
 - `tables` is every table you own. This is what the boundary gate reads.
 - `configSchema` validates `venue_modules.config`. **Every field needs a default**, so that
   `configSchema.parse({})` is a working config: a module that was never configured reads as its
@@ -255,6 +273,31 @@ The fields of `defineModule` (`packages/core/src/modules.ts`):
 
 Everything a venue might want to be different goes in the config (rule 8). The code reads the
 config that `assertModule` returns; it never asks which venue it is.
+
+### The manifest
+
+The manifest (`ModuleManifest` in `packages/core/src/modules.ts`; `docs/CONSOLE_IA.md` section 6)
+is the one description of the module that people and assistants see: the public catalogue at
+`/plugins.json` and `/llms.txt`, the console's Channels and Plugins pages, the product site's
+plugins page and the assistant's `plugins_list` are all generated from it. Nothing about a module
+is written by hand anywhere else, so it cannot drift from the code.
+
+| Field | What to write |
+|---|---|
+| `name` | The same words as the module's `name`. A card and a confirmation question ("Switch on Specials board at …?") must agree, and the gate checks they do. |
+| `purpose` | One line: what the venue gets. |
+| `category` | Where it sits in the catalogue: `channels`, `selling`, `guests`, `marketing`, `insight`, `setup` or `integration`. |
+| `kind` | `channel` for a place guests meet the venue (the website, the QR menu, ordering, delivery, bookings, the guest assistant connection); otherwise `module`. Plugs are `plug`, but that comes from `definePlug`, never from a module. |
+| `needs` | What a venue must have or do before the module is useful, in plain words. Modules you `dependsOn` are added in front of it automatically ("Online ordering switched on first"). A module that needs nothing says so. |
+| `reads`, `writes` | The data it touches, in plain words ("the menu", "guest records", "bookings and their status"). |
+| `consent` | Optional. What it means for guests' consent, when it touches guests at all ("A booking never adds a guest to a marketing list."). |
+| `publicAddress` | Channels only. `({ platformOrigin, siteOrigin, venue }) => string \| null`: where guests reach it, built from the venue's own site origin (null until the venue has a verified host) or the platform's. A part that differs per code or table is written in angle brackets: `${siteOrigin}/q/<code>`. |
+
+Write it for a venue owner: covers, service, docket, till, front of house. Never "SKU",
+"merchant", "fulfilment" or "inventory". `defineModule` refuses an empty field at import time;
+`pnpm check:manifests` (`scripts/check-manifests.ts`) refuses the banned words, a channel that is
+not one of the six channels, a channel without a `publicAddress`, and a docs link whose file
+does not exist. The gate is part of `pnpm gates`.
 
 Register the module by adding one line to `packages/modules/src/index.ts`:
 
@@ -579,10 +622,11 @@ console's Features page, whose form is generated from your config schema
 pnpm typecheck
 pnpm check:modules
 pnpm check:tenant-branching
+pnpm check:manifests
 ROS_STRICT_SEEDERS=1 npx vitest run
 ```
 
-Or `pnpm gates`, which runs all four. Every one must pass.
+Or `pnpm gates`, which runs all five. Every one must pass.
 
 ---
 
@@ -598,17 +642,43 @@ A venue's assistant connects to the hub's MCP server. Three tools, declared in
 | Field | Value for `specials` | Comes from |
 |---|---|---|
 | `plugin` | `specials` | `key` |
-| `name` | `Specials board` | `name` |
-| `purpose` | `Daily or weekly specials a manager posts…` | `description` |
+| `name` | `Specials board` | `manifest.name` |
+| `purpose` | `Daily or weekly specials a manager posts…` | `manifest.purpose` |
 | `kind` | `plugin` | not a spine module, not a plug |
+| `catalogue_kind`, `category` | `module`, `selling` | `manifest.kind`, `manifest.category` |
 | `on` | true or false | `venue_modules` |
-| `needs` | the `needs` list, with "<module> switched on first" for each entry in `dependsOn` | `needs`, `dependsOn` |
+| `needs` | the manifest's `needs`, with "<module> switched on first" for each entry in `dependsOn` | `manifest.needs`, `dependsOn` |
+| `reads`, `writes`, `consent` | `["the specials board"]`, `["specials posted and taken down"]`, null | the manifest |
+| `public_address` | null (a channel gives its address at this venue) | `manifest.publicAddress` |
+| `docs` | `https://github.com/Pipedlinehq/pipedline/blob/main/docs/modules/specials.md` | `DOCUMENTED_MODULES` |
 | `settings` | `{ heading: "Specials", show_prices: true, max_running: 10, max_days: 31 }` | the stored config, or the defaults |
 | `settings_schema` | JSON Schema of the config | generated from `configSchema` |
 | `you_may_change_it` | true | false only when `assistantConfigurable: false` |
 
 You write nothing extra for this. The entry is generated from the module definition
 (`listPlugins` in `packages/modules/src/tenancy/plugins.ts`), so it cannot drift from the code.
+
+### The public catalogue
+
+The same manifests, with no key and no venue, are what anyone can read on the platform host
+(`docs/CONSOLE_IA.md` section 6; `packages/modules/src/tenancy/plugin-catalogue.ts`):
+
+| Address | What |
+|---|---|
+| `GET /plugins.json` | `{ generated_at, platform, assistant_endpoint, guest_endpoint, plugins: [...] }`. Each plugin: `key`, `name`, `kind` (`channel` / `module` / `plug`), `category`, `purpose`, `needs`, `reads`, `writes`, `consent`, `always_on` (a spine module), `public_address`, `connect` (a plug: how the venue connects it), `tools` (`name`, `effect`, `description` of each `defineTool` the module declares), `config_schema` (JSON Schema with every `.describe()`), `config_scope` (`venue` / `organisation`), `docs`. Public and cacheable. A staff member signed in to the console gets the same for the venue they are looking at, plus `venue`, `on` per plugin and (for a manager) `config`; that answer is private. |
+| `GET /llms.txt` | The same in plain text for an assistant: what Pipedline is, the two MCP endpoints, each plugin in a paragraph, its tools. |
+
+- `tenancy.pluginCatalogue(app)` builds the public shape from the registries alone (no database);
+  `tenancy.pluginCatalogueForVenue(ctx, venueId)` adds `on` and `config` for a staff member at
+  one venue (any role sees `on`; a manager sees settings).
+- `pnpm catalogue:snapshot` writes `docs/plugins.snapshot.json`, the public shape for
+  `app.pipedline.com`, so the product site can fall back on it. Run it when a manifest or a tool
+  changes and leave the file in the tree.
+- Plugs appear with `kind: "plug"` from their `definePlug` entry: name, description and the
+  `connect` hint. Their tools are not listed there: a plug's tool list is reviewed and pinned per
+  deployment (section 5.3) and offered through the hub to a venue's assistant.
+- The web app only mounts the two answers: `apps/web/src/app/(platform)/plugins.json/route.ts`
+  and `apps/web/src/app/(platform)/llms.txt/route.ts`.
 
 **`plugin_enable`** takes the plugin key and optional settings. **`plugin_configure`** changes
 settings of a plugin that is on. **`plugin_disable`** switches it off and keeps its data. All
@@ -819,7 +889,7 @@ What a reviewer checks. Run through it yourself first.
 **For a module**
 
 Gates and tests
-- [ ] `pnpm typecheck`, `pnpm check:modules`, `pnpm check:tenant-branching` pass.
+- [ ] `pnpm typecheck`, `pnpm check:modules`, `pnpm check:tenant-branching`, `pnpm check:manifests` pass.
 - [ ] `ROS_STRICT_SEEDERS=1 npx vitest run` passes, the whole suite, not only your file.
 - [ ] `db.gen.ts` was regenerated and its diff contains only your tables.
 
@@ -859,6 +929,9 @@ Tools
 
 Config and documents
 - [ ] Every setting has a default, bounds and a `.describe()`.
+- [ ] A manifest in an owner's words (name, purpose, category, kind, needs, reads, writes, consent
+      where it touches guests; a `publicAddress` for a channel), and `docs/plugins.snapshot.json`
+      regenerated with `pnpm catalogue:snapshot`.
 - [ ] A fixture seeder that seeds both fixture organisations through the module's own functions.
 - [ ] `CLAUDE.md` in the module directory, a spec in `docs/modules/`, a row in `docs/MODULES.md`.
 
@@ -892,9 +965,12 @@ Exact about today. Each item names the file that shows it.
 3. **Module code is not sandboxed.** It runs in the engine's process with the engine's database
    connection. Row-level security, the gates and review are the protection. That is why a
    module is merged, not installed.
-4. **There is no public catalogue or registry.** `docs/PIPEDLINE.md` section 3 describes one
-   (`/plugins.json`, `/llms.txt`, a public plugins page). None of it exists. The only catalogue
-   is `plugins_list`, which an assistant with a venue's key can read.
+4. **The public catalogue describes this deployment, not an ecosystem.** `/plugins.json` and
+   `/llms.txt` exist (section 4) and list every module and plug compiled into the engine, from
+   their manifests. There is no registry where a module or plug from outside this repository
+   could be listed, and the product site's page that renders the catalogue
+   (`docs/CONSOLE_IA.md` section 7) is the site's to build; `docs/plugins.snapshot.json` is its
+   fallback.
 5. **There is no scaffold command.** You copy an existing module.
 6. **Migration number ranges are not written down.** They are a habit visible in
    `db/migrations/`. Two people can pick the same number.
@@ -916,7 +992,10 @@ Exact about today. Each item names the file that shows it.
     (`packages/runtime/src/env.ts`, which knows only `CRIOTA_MCP_URL`). The address is fixed in
     code on purpose: a venue must not be able to point the engine at an address of its choosing.
 11. **There is no manifest format for a plug.** `docs/modules/hub.md` section 6 says "a community
-    plug is a manifest, not code we run". No manifest exists; a plug is a `definePlug` call.
+    plug is a manifest, not code we run". A plug is a `definePlug` call; its catalogue entry
+    (`kind: "plug"`) is built from that call's name, description and how it connects, with
+    generic words for what it reads and writes. Modules have a manifest (section 3, step 2);
+    plugs do not.
 12. **The `community` tier is a word in a type** (`PlugDef.tier` in
     `packages/core/src/connections.ts`). Nothing reads the tier, and nothing makes a community
     plug read-only until reviewed, as that document says it should be. Every plug is held to the
@@ -928,7 +1007,7 @@ Exact about today. Each item names the file that shows it.
     Criota (`packages/modules/src/analytics/outcomes.ts`). There is no general, consented way
     for a venue to share totals with another service.
 15. **A plug cannot be switched on by an assistant.** `plugins_list` shows plugs as kind
-    `connection`. Connecting one, and listing it in `enabled_plugs`, are done by a person in the
+    `connection` (`catalogue_kind: "plug"`). Connecting one, and listing it in `enabled_plugs`, are done by a person in the
     console: the access key is never handled by an assistant, and `hub` settings are not
     assistant-configurable.
 16. **There is no self-service review.** Review is a platform admin pressing a button after

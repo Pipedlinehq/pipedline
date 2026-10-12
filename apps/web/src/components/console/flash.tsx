@@ -46,7 +46,7 @@ export function FlashRegion() {
     return () => window.clearTimeout(id);
   }, [now]);
   return (
-    <div role="status" aria-live="polite" data-testid="console-flash" className="pointer-events-none fixed inset-x-0 bottom-4 z-50 flex justify-center px-4">
+    <div role="status" aria-live="polite" data-testid="console-flash" className="pointer-events-none fixed inset-x-0 bottom-20 z-50 flex justify-center px-4 md:bottom-4">
       {now ? (
         <p className="pointer-events-auto flex max-w-xl items-start gap-3 rounded-lg border border-good bg-good-soft px-4 py-3 text-sm font-medium text-good shadow-lg">
           <span>{now.message}</span>

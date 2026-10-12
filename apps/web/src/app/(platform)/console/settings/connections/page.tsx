@@ -8,7 +8,7 @@ import { PosConnectForm } from '@/components/console/settings-connect';
 import { ServiceKeyForm } from '@/components/console/settings-once';
 import { NotForYourRole, ReadError } from '@/components/console/states';
 import { accessOf, signInConfigured, signInPosPlugs } from '@/lib/pos-signin';
-import { ActionForm, Badge, Card, EmptyState, Field, FormMessage, Input, PageHeader, Select, SubmitButton, dateTime } from '@/ui';
+import { ActionForm, Badge, Card, EmptyState, Field, FormMessage, Input, LinkButton, PageHeader, Select, SubmitButton, dateTime } from '@/ui';
 import {
   checkPlugs,
   connectAdsAccount,
@@ -85,7 +85,12 @@ export default async function ConnectionsPage({ searchParams }: { searchParams: 
 
   return (
     <>
-      <PageHeader title="Connected services" description={`The point of sale, payments and other services ${c.venue.name} is connected to, and whether each is healthy. Credentials are sealed; nobody can read them back, including us.`} />
+      <PageHeader
+        eyebrow="Plugins"
+        title="Connected services"
+        description={`The point of sale, payments and other services ${c.venue.name} is connected to, and whether each is healthy. Credentials are sealed; nobody can read them back, including us.`}
+        actions={<LinkButton href="/console/plugins" size="sm">All plugins</LinkButton>}
+      />
       <div className="space-y-6">
         {justConnected && justConnectedRow ? (
           <div data-testid="signin-notice">
@@ -264,7 +269,7 @@ export default async function ConnectionsPage({ searchParams }: { searchParams: 
               {signInPos.map(({ plug: p, configured }) => {
                 const connected = live.some((r) => r.plug_key === p.key && r.venue_id === c.venue.id);
                 return (
-                  <section key={p.key} aria-label={p.name} data-testid={`signin-${p.key}`}>
+                  <section key={p.key} id={`plug-${p.key}`} aria-label={p.name} data-testid={`signin-${p.key}`}>
                     <h3 className="text-sm font-semibold text-ink">{p.name}</h3>
                     {!configured ? (
                       <p className="mt-1 text-sm text-ink-2">{p.name} sign-in is not configured on this deployment, so {p.name} cannot be connected from here yet.</p>
@@ -316,6 +321,9 @@ export default async function ConnectionsPage({ searchParams }: { searchParams: 
               })}
               {directPos.length ? (
                 <div className={signInPos.length ? 'border-t border-line pt-4' : undefined}>
+                  {directPos.map((p) => (
+                    <span key={p.key} id={`plug-${p.key}`} />
+                  ))}
                   <PosConnectForm plugs={directPos} findLocations={findPosLocations} connect={connectPosLocation} venueName={c.venue.name} />
                 </div>
               ) : signInPos.length === 0 ? (
@@ -324,6 +332,9 @@ export default async function ConnectionsPage({ searchParams }: { searchParams: 
             </div>
           </Card>
           <Card title="Connect a service for assistants" description="A service with its own assistant tools (such as Criota). Its tools reach your assistants only after you switch them on for a venue.">
+            {mcp.map((p) => (
+              <span key={p.key} id={`plug-${p.key}`} />
+            ))}
             {mcp.length === 0 ? (
               <p className="text-sm text-ink-3">No such services are available.</p>
             ) : (
@@ -351,6 +362,9 @@ export default async function ConnectionsPage({ searchParams }: { searchParams: 
 
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
           <Card title="Your email platform" description="Keep your own email platform’s list in step with your guests and their consent. Connected for the whole organisation.">
+            {espPlugs.map((p) => (
+              <span key={p.key} id={`plug-${p.key}`} />
+            ))}
             {!esp.ok ? (
               <ReadError message={esp.error} />
             ) : esp.data.length === 0 ? (
@@ -425,6 +439,9 @@ export default async function ConnectionsPage({ searchParams }: { searchParams: 
           </Card>
 
           <Card title="Ad platform conversions" description="Report purchases to your ad platform so ads are measured on real sales. Only for guests who agreed to it; only a hashed email and phone and the amount.">
+            {adsPlugs.map((p) => (
+              <span key={p.key} id={`plug-${p.key}`} />
+            ))}
             {!ads.ok ? (
               <ReadError message={ads.error} />
             ) : ads.data.length === 0 ? (

@@ -116,7 +116,7 @@ rest. Each tool is declared by the module that owns the behaviour and pinned to 
 | `setup_status` | read | onboarding | `setup:read` · owner. What is done, the one next step in plain words, what only the owner can answer. Called first, and after every change. |
 | `venue_describe` | read | tenancy | `venue:read` |
 | `venue_update` | write | tenancy | `venue:write` · manager. Name, address, phone, time zone, cuisine, the week's hours. |
-| `plugins_list` | read | tenancy | `plugins:read` · manager. Every module and plug: purpose, needs, on or off, settings, and the settings as JSON Schema generated from the module's zod schema. |
+| `plugins_list` | read | tenancy | `plugins:read` · manager. Every module and plug, from its manifest: purpose, category, kind (channel / module / plug), needs, what it reads and writes, consent, its public address at this venue, docs; on or off, settings, and the settings as JSON Schema generated from the module's zod schema. The same manifests are served to anyone at `/plugins.json` and `/llms.txt` (`PLUGINS.md` "The public catalogue"). |
 | `plugin_enable` / `plugin_configure` / `plugin_disable` | write | tenancy | `plugins:write` · manager. A setting the module does not have, or a value its schema refuses, is answered with which and why. |
 | `connections_list` | read | tenancy | `connections:read` |
 | `connection_start` | write | ledger | `connections:write` · manager. Returns the provider's sign-in link for the owner to open. |

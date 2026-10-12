@@ -23,6 +23,7 @@ incumbent tools.
 | Understanding where this is going | `PIPEDLINE.md` — the direction of record |
 | Running it yourself | `SELF_HOSTING.md` |
 | Writing a plugin | `PLUGINS.md` |
+| Working on the staff console (sections, Home, Channels, Plugins, Assistant) | `CONSOLE_IA.md` (the spec), `CONSOLE.md` (the tour) |
 | Making any schema decision | `SCHEMA.md` — the org/venue/customer/transaction spine |
 | Deciding how tenants get isolated, themed, routed, cached | `ARCHITECTURE.md` |
 | Adding or scoping a module | `MODULES.md` → then `modules/<name>.md` |

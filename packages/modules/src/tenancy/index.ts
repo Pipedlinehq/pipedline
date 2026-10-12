@@ -6,4 +6,5 @@ export * from './domains';
 export * from './quota';
 export * from './tools';
 export * from './plugins';
+export * from './plugin-catalogue';
 export * from './setup-tools';

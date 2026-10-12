@@ -7,15 +7,30 @@ import { defineEvent, defineModule } from '@ros/core';
  */
 export const offersConfig = z.object({
   /** Codes can be redeemed at this venue. */
-  acceptHere: z.boolean().default(true),
+  acceptHere: z.boolean().default(true).describe('Whether offer codes can be used at this venue. Off: a code is refused here, online and at the counter. Default on.'),
   /** When a till sale carries a code in its discounts, mark that code redeemed. */
-  matchTillDiscounts: z.boolean().default(true),
+  matchTillDiscounts: z
+    .boolean()
+    .default(true)
+    .describe('When a sale from the till carries one of your codes in its discounts, mark that code as used. Default on.'),
   /** Front of house may mark a code redeemed by hand against a sale. */
-  staffRedeem: z.boolean().default(true),
+  staffRedeem: z.boolean().default(true).describe('Whether front of house may mark a code as used by hand, against a sale. Default on.'),
   /** The most codes one bulk issue may create. */
-  bulkIssueMax: z.number().int().min(1).max(50_000).default(5000),
+  bulkIssueMax: z
+    .number()
+    .int()
+    .min(1)
+    .max(50_000)
+    .default(5000)
+    .describe('The most guests one bulk send may issue codes to at once. A longer list is refused and has to be split. Default 5000.'),
   /** A code that lapsed between pricing an order and paying for it is still honoured for this long. */
-  paymentGraceMinutes: z.number().int().min(0).max(240).default(30),
+  paymentGraceMinutes: z
+    .number()
+    .int()
+    .min(0)
+    .max(240)
+    .default(30)
+    .describe('A code that expires between a guest pricing their order and paying for it is still honoured for this many minutes. Default 30.'),
 });
 export type OffersConfig = z.infer<typeof offersConfig>;
 
@@ -24,6 +39,15 @@ export const offersModule = defineModule({
   name: 'Offers',
   description: 'Unique per-customer codes: click-to-claim offers, vouchers, creator offers.',
   dependsOn: ['identity', 'ledger', 'comms'],
+  manifest: {
+    name: 'Offers',
+    purpose: 'One-off codes for a guest: welcome offers, vouchers, come-back offers, creator offers. Redeemed at online checkout, matched from a till sale, or marked off by front of house.',
+    category: 'marketing',
+    kind: 'module',
+    needs: ['Nothing to connect. Till discounts are matched to codes when the till is connected.'],
+    reads: ['sales (to see a code used at the till)', 'guest records'],
+    writes: ['offers and codes', 'redemptions'],
+  },
   tables: ['offers', 'offer_codes'],
   configSchema: offersConfig,
   configVersion: 1,

@@ -7,10 +7,19 @@ export type OnboardingConfig = z.infer<typeof onboardingConfig>;
 
 export const onboardingModule = defineModule({
   key: 'onboarding',
-  name: 'Onboarding',
+  name: 'Setup',
   description: 'Intake, automated provisioning, menu import, go-live checks, tenant health.',
   spine: true,
   dependsOn: ['tenancy'],
+  manifest: {
+    name: 'Setup',
+    purpose: 'From sign-up to live: the venue as a draft, the setup steps in order, bringing a menu in from a link, a file or the till, and the checklist that has to pass before the venue goes public.',
+    category: 'setup',
+    kind: 'module',
+    needs: ['Nothing: it starts when the venue does.'],
+    reads: ['venue details', 'which plugins are on', 'the menu'],
+    writes: ['setup progress', 'the imported menu, once the owner confirms it', 'the venue\'s live status'],
+  },
   tables: ['onboardings', 'provisioning_steps', 'onboarding_touches', 'menu_imports', 'support_access'],
   configSchema: onboardingConfig,
   configVersion: 1,

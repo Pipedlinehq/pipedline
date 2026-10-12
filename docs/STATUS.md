@@ -8,8 +8,8 @@ machine against a real Postgres and, for the browser suite, the production build
 
 | Check | Result | How to run |
 |---|---|---|
-| Service tests (real Postgres, seeded two-org fixture) | 818 pass, 89 files, strict seeding | `pnpm test` |
-| Browser end-to-end (production build, headless Chromium, database read back) | 136 pass, 34 files (includes an automated accessibility pass) | `pnpm e2e` |
+| Service tests (real Postgres, seeded two-org fixture) | 823 pass, 90 files, strict seeding | `pnpm test` |
+| Browser end-to-end (production build, headless Chromium, database read back) | 144 pass, 35 files (includes an automated accessibility pass) | `pnpm e2e` |
 | Typecheck, module boundaries, no tenant branching | clean | `pnpm gates` |
 
 What those cover: tenant isolation on every table; consent and card-identifier rules; idempotent
@@ -32,6 +32,20 @@ the first real email has been run. Containers, proxy, TLS, custom domains and ba
 
 Plugins (`docs/PLUGINS.md`): the `specials` module was written by following the guide. A plugin
 must still be merged into this repository; there is no outside loading, catalogue or registry.
+
+Console (`docs/CONSOLE.md`, spec `docs/CONSOLE_IA.md`, 2026-10-12): the staff console is laid out as
+thirteen sections in a fixed order (Home, Orders, Bookings, Menu, Customers, Marketing, Offers,
+Website, Analytics, Channels, Plugins, Assistant, Settings) with the venue switcher and the
+organisation's name at the top and, on a phone, a bottom bar (Home, Orders, Bookings, Menu, More).
+Home shows today's service, what is waiting for a yes, the week against last, setup progress until
+live and what the assistant did; the book (`/console/bookings`) and the booking rules (generated
+from the bookings config schema) are new; Channels and Plugins are rendered from the module
+manifests through `tenancy.pluginCatalogueForVenue`, with configure forms generated from each
+module's config schema and its descriptions; Assistant (`/console/assistant`, the old
+`settings/assistants` redirects) shows the connection, every call, each change's before and after,
+approvals from assistants and the hosted agents with their modes. The look is the console's own
+(warm neutral ground, near-black ink, one deep-green accent, Fraunces display and IBM Plex Sans
+text, self-hosted, light and dark); nothing from Polaris. Every earlier route still answers.
 
 ## Simulated only (never run against the real service)
 
@@ -58,7 +72,7 @@ Every provider. Real adapters exist for the ones marked "written"; none has been
 Bookings, full KDS (stations, coursing), own POS, marketplace order ingest, inventory, rostering,
 gift cards (deferred by design: `docs/ROADMAP.md`). Also: PDF menu import, address geocoding,
 SMS sender registration, voucher purchase, platform-admin second factor, analytics/pixel tags on
-venue sites are built but off by default (`ROS_SITE_TAGS`) pending consent wording; per-venue custom domains; console screens for agent runs.
+venue sites are built but off by default (`ROS_SITE_TAGS`) pending consent wording; per-venue custom domains; a console screen for the detail of a hosted agent's run (the Assistant page lists runs and their summaries).
 
 ## Known gaps and risks
 

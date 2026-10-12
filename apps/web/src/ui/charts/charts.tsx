@@ -129,7 +129,7 @@ export function ChartFrame({
 }) {
   const [asTable, setAsTable] = useState(false);
   return (
-    <figure className="rounded-lg border border-line bg-surface p-5">
+    <figure className="rounded-card border border-line bg-surface p-5">
       <figcaption className="mb-3 flex items-start justify-between gap-3">
         <div>
           <p className="text-base font-semibold text-ink">{title}</p>
@@ -520,12 +520,12 @@ export function StatTile({
   const flat = has && Math.abs(delta!) < 0.0005;
   const good = goodWhen === 'neither' || flat ? null : goodWhen === 'up' ? up : !up;
   return (
-    <div className="rounded-lg border border-line bg-surface p-4" aria-labelledby={id}>
+    <div className="rounded-card border border-line bg-surface p-4" aria-labelledby={id}>
       <p id={id} className="text-sm text-ink-2">
         {label}
       </p>
       <div className="mt-1 flex items-end justify-between gap-3">
-        <p className="text-2xl font-semibold tracking-tight text-ink">{value}</p>
+        <p className="font-display text-[1.75rem] font-medium tabular-nums text-ink">{value}</p>
         {trend ? <Sparkline values={trend} /> : null}
       </div>
       {has ? (

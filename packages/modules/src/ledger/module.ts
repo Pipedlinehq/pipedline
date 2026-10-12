@@ -3,10 +3,19 @@ import { defineEvent, defineModule } from '@ros/core';
 
 export const ledgerModule = defineModule({
   key: 'ledger',
-  name: 'Ledger',
+  name: 'Sales record',
   description: 'The append-only record of what was sold: transactions, their lines, and attribution.',
   spine: true,
   dependsOn: ['identity'],
+  manifest: {
+    name: 'Sales record',
+    purpose: 'Every sale the venue makes, from the till or online, kept once and never rewritten: what was sold, when, through which channel, and to which guest where known.',
+    category: 'selling',
+    kind: 'module',
+    needs: ['A till connected (Square), or Online ordering switched on, so sales arrive.'],
+    reads: ['guest records, to tie a sale to a guest'],
+    writes: ['sales and their lines', 'refunds', 'which message or offer a sale followed'],
+  },
   tables: ['transactions', 'transaction_lines', 'transaction_attributions', 'ingest_cursors'],
   configSchema: z.object({}),
   configVersion: 1,

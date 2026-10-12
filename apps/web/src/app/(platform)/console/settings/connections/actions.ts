@@ -100,7 +100,7 @@ export async function disconnectPosSignIn(_prev: FormState, fd: FormData): Promi
 export async function connectAssistantPlug(_prev: FormState, fd: FormData): Promise<FormState> {
   return act(
     (ctx) => hub.connectMcpPlug(ctx, { plugKey: text(fd, 'plugKey'), accessKey: text(fd, 'accessKey'), account: text(fd, 'account') || 'default', venueId: null }),
-    { success: 'Connected. We check the key with the service in the background; switch its tools on for assistants under Features → Assistant access.', revalidate: PATH },
+    { success: 'Connected. We check the key with the service in the background; switch its tools on for assistants under Assistant → Settings at this venue.', revalidate: PATH },
   );
 }
 

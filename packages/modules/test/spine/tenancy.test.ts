@@ -6,11 +6,14 @@ import { tenancy } from '@ros/modules';
 
 const WORKER = { kind: 'worker' as const, job: 'test' };
 
+const testManifest = (name: string) => ({ name, purpose: 'test-only module', category: 'setup' as const, kind: 'module' as const, needs: ['nothing'], reads: ['nothing'], writes: ['nothing'] });
+
 const demoModule = defineModule({
   key: 'test_demo',
   name: 'Demo',
   description: 'test-only module',
   dependsOn: [],
+  manifest: testManifest('Demo'),
   tables: [],
   configSchema: z.object({ slotMinutes: z.number().int().min(5).max(60), greeting: z.string().max(40) }),
   configVersion: 1,
@@ -21,6 +24,7 @@ const dependentModule = defineModule({
   name: 'Dependent',
   description: 'test-only module',
   dependsOn: ['test_demo'],
+  manifest: testManifest('Dependent'),
   tables: [],
   configSchema: z.object({}),
   configVersion: 1,

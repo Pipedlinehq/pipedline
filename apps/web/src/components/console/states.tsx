@@ -9,9 +9,9 @@ export function ModuleOff({ title, what, canManage }: { title: string; what: str
       <PageHeader title={title} />
       <EmptyState
         title={`${what} is switched off at this venue`}
-        action={canManage ? <LinkButton href="/console/settings/features">Go to Features</LinkButton> : undefined}
+        action={canManage ? <LinkButton href="/console/plugins">Go to Plugins</LinkButton> : undefined}
       >
-        {canManage ? 'Switch it on in Settings → Features to use this screen. Its data is kept while it is off.' : 'A manager can switch it on. Its data is kept while it is off.'}
+        {canManage ? 'Switch it on under Plugins to use this screen. Its data is kept while it is off.' : 'A manager can switch it on. Its data is kept while it is off.'}
       </EmptyState>
     </>
   );

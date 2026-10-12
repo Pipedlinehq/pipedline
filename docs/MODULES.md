@@ -52,6 +52,11 @@ Every module ships, or it is not shippable:
    back from the database. This is the lesson an earlier build paid for.
 9. **Its agent tools, if any, declared with the module** (`modules/hub.md` §2): pinned to the
    module's own server actions, with an output allowlist.
+10. **A manifest in an owner's words** (added 2026-10-12; `CONSOLE_IA.md` §6, `PLUGINS.md`
+    "The manifest"): name, purpose, category, kind (channel or module), needs, reads, writes,
+    consent where it touches guests, a public address for a channel. The public catalogue
+    (`/plugins.json`, `/llms.txt`), the console's Channels and Plugins pages and the assistant's
+    `plugins_list` are generated from it. `pnpm check:manifests` is the gate.
 
 ## Cross-cutting rule
 

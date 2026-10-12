@@ -31,7 +31,7 @@ describe('console settings: keys, team, screens, features', () => {
   it('an owner creates an assistant key: shown once, only its hash stored; then revokes it', async () => {
     const v = await newVisitor();
     await signInStaff(v.page, 'owner@oak-diner.test');
-    await v.page.goto(`${BASE()}/console/settings/assistants`);
+    await v.page.goto(`${BASE()}/console/assistant`);
     const name = `E2E key ${run}`;
     await v.page.fill('input[name=name]', name);
     await v.page.click('button:has-text("Create key")');

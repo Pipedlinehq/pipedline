@@ -4,7 +4,7 @@ import { formSpec } from '@/lib/console-schema-form';
 import { ConfirmAction, InlineAction } from '@/components/console/confirm';
 import { ModuleSettingsForm } from '@/components/console/settings-form';
 import { NotForYourRole } from '@/components/console/states';
-import { Badge, Card, PageHeader } from '@/ui';
+import { Badge, Card, LinkButton, PageHeader } from '@/ui';
 import { saveFeatureOptions, setFeatureEnabled } from './actions';
 
 export const metadata = { title: 'Features · Pipedline' };
@@ -29,8 +29,10 @@ export default async function FeaturesPage() {
   return (
     <>
       <PageHeader
+        eyebrow="Plugins"
         title="Features"
-        description={`What is switched on at ${c.venue.name}, and how each feature behaves. Switching a feature off hides its screens and stops it for guests; its data is kept.`}
+        description={`What is switched on at ${c.venue.name}, and how each feature behaves. Switching a feature off hides its screens and stops it for guests; its data is kept. The Plugins page shows the same switches with what each piece needs, reads and writes.`}
+        actions={<LinkButton href="/console/plugins" size="sm">All plugins</LinkButton>}
       />
       <div className="space-y-4">
         {modules.map((m) => (

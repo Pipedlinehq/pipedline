@@ -7,44 +7,131 @@ import { defineEvent, defineModule } from '@ros/core';
  * Extend this schema; never hardcode a venue's choice.
  */
 export const orderingConfig = z.object({
-  pickup_enabled: z.boolean().default(true),
+  pickup_enabled: z
+    .boolean()
+    .default(true)
+    .describe('Whether guests can order for pickup from the venue\'s site. Off pauses new pickup orders without changing any other setting. Default on.'),
 
   // Pacing: a kitchen has a throughput ceiling.
-  slot_minutes: z.number().int().min(5).max(120).default(15),
-  max_orders_per_slot: z.number().int().min(1).max(500).default(6),
+  slot_minutes: z
+    .number()
+    .int()
+    .min(5)
+    .max(120)
+    .default(15)
+    .describe('Pickup times are offered in steps of this many minutes, e.g. 12:00, 12:15, 12:30 with 15. Default 15.'),
+  max_orders_per_slot: z
+    .number()
+    .int()
+    .min(1)
+    .max(500)
+    .default(6)
+    .describe('Kitchen pacing: the most orders that may be due in one pickup slot. A full slot is not offered to guests. Default 6.'),
   /** Units across all orders in a slot. Null = no item cap. */
-  max_items_per_slot: z.number().int().min(1).max(5000).nullable().default(null),
+  max_items_per_slot: z
+    .number()
+    .int()
+    .min(1)
+    .max(5000)
+    .nullable()
+    .default(null)
+    .describe('Kitchen pacing: the most items, counted across every order, that may be due in one pickup slot. Empty (the default): no item limit, only the order limit.'),
   /** The least time between an order and its pickup. A longer item prep time extends it. */
-  lead_time_minutes: z.number().int().min(0).max(1440).default(20),
+  lead_time_minutes: z
+    .number()
+    .int()
+    .min(0)
+    .max(1440)
+    .default(20)
+    .describe('The least time between an order being placed and its pickup, in minutes. An item with a longer preparation time pushes it out further. Default 20.'),
   /** No pickup this close to the end of a trading period. */
-  cutoff_before_close_minutes: z.number().int().min(0).max(600).default(15),
-  asap_enabled: z.boolean().default(true),
+  cutoff_before_close_minutes: z
+    .number()
+    .int()
+    .min(0)
+    .max(600)
+    .default(15)
+    .describe('No pickup time is offered this close to the end of a trading period, in minutes. Default 15.'),
+  asap_enabled: z
+    .boolean()
+    .default(true)
+    .describe('Whether guests may choose "as soon as possible" instead of a set pickup time. Table orders are always as soon as possible. Default on.'),
   /** How far ahead a pickup may be scheduled. 0 = today only. */
-  max_days_ahead: z.number().int().min(0).max(30).default(2),
+  max_days_ahead: z.number().int().min(0).max(30).default(2).describe('How many days ahead a pickup may be ordered. 0 means today only. Default 2.'),
 
-  tipping_enabled: z.boolean().default(false),
+  tipping_enabled: z.boolean().default(false).describe('Whether guests are offered a tip at checkout. Default off.'),
   /** Percentages offered at checkout. */
-  tip_presets: z.array(z.number().int().min(0).max(100)).max(6).default([5, 10, 15]),
-  max_tip_percent: z.number().int().min(0).max(100).default(50),
+  tip_presets: z
+    .array(z.number().int().min(0).max(100).describe('One tip choice, as a percentage of the order (0 to 100).'))
+    .max(6)
+    .default([5, 10, 15])
+    .describe('The tip choices offered at checkout, as percentages of the order. Up to six. Default 5, 10 and 15.'),
+  max_tip_percent: z
+    .number()
+    .int()
+    .min(0)
+    .max(100)
+    .default(50)
+    .describe('The largest tip accepted, as a percentage of the order. A guest typing a bigger one is asked to lower it. Default 50.'),
 
-  min_order_cents: z.number().int().min(0).default(0),
+  min_order_cents: z
+    .number()
+    .int()
+    .min(0)
+    .default(0)
+    .describe('The smallest pickup order accepted, in cents (2000 is $20.00), before any discount. 0: no minimum. Default 0.'),
   /** Leave alcohol out of pickup and delivery orders (a venue without a takeaway licence). */
-  exclude_alcohol: z.boolean().default(false),
-  promo_codes_enabled: z.boolean().default(true),
+  exclude_alcohol: z
+    .boolean()
+    .default(false)
+    .describe('Leave alcohol out of pickup and delivery orders, e.g. a venue without a takeaway licence. Default off.'),
+  promo_codes_enabled: z.boolean().default(true).describe('Whether guests may enter an offer or reward code at checkout. Default on.'),
 
   /** Where a new order is announced. The screen is the kitchen order screen. */
-  kitchen_routing: z.array(z.enum(['screen', 'email', 'sms'])).default(['screen']),
-  kitchen_email: z.string().email().nullable().default(null),
-  manager_sms: z.string().min(6).max(30).nullable().default(null),
+  kitchen_routing: z
+    .array(z.enum(['screen', 'email', 'sms']).describe('"screen", "email" or "sms".'))
+    .default(['screen'])
+    .describe('Where a new paid order is announced: "screen" (the kitchen order screen), "email" (sent to kitchen_email) and "sms" (a text to manager_sms). Any mix. Default: the screen only.'),
+  kitchen_email: z
+    .string()
+    .email()
+    .nullable()
+    .default(null)
+    .describe('The email address new paid orders are sent to when kitchen_routing includes "email". Empty: no email is sent.'),
+  manager_sms: z
+    .string()
+    .min(6)
+    .max(30)
+    .nullable()
+    .default(null)
+    .describe('The mobile number texted about new paid orders when kitchen_routing includes "sms". Empty: no text is sent.'),
   /** The new-order alert on the screen repeats this often until someone acknowledges the ticket. */
-  alert_repeat_seconds: z.number().int().min(5).max(600).default(30),
+  alert_repeat_seconds: z
+    .number()
+    .int()
+    .min(5)
+    .max(600)
+    .default(30)
+    .describe('How often the new-order alert repeats on the kitchen screen until someone taps the ticket, in seconds. Default 30.'),
   /** Accept paid orders without a person confirming them. */
-  auto_accept: z.boolean().default(false),
+  auto_accept: z
+    .boolean()
+    .default(false)
+    .describe('Accept every paid order straight away, without a person pressing accept. Off: each order waits on the kitchen screen to be accepted or turned down. Default off.'),
   /** A paired kitchen screen may turn a paid order down. Off: only staff signed in can reject. */
-  screen_can_reject: z.boolean().default(true),
+  screen_can_reject: z
+    .boolean()
+    .default(true)
+    .describe('Whether a paired kitchen screen may turn a paid order down. Off: only staff signed in to the console can. Default on.'),
 
   /** How long an unpaid order holds its slot before it is cancelled. */
-  payment_hold_minutes: z.number().int().min(2).max(120).default(15),
+  payment_hold_minutes: z
+    .number()
+    .int()
+    .min(2)
+    .max(120)
+    .default(15)
+    .describe('How long an order that has not been paid keeps its pickup slot before it is cancelled, in minutes. Default 15.'),
 });
 export type OrderingConfig = z.infer<typeof orderingConfig>;
 
@@ -53,7 +140,16 @@ export const orderingModule = defineModule({
   name: 'Online ordering',
   description: 'Pickup and table orders: cart pricing, slot pacing, checkout, payment, status, the kitchen order screen.',
   dependsOn: [],
-  needs: ['A menu with prices', 'Trading hours', 'A payment account connected (Square), so guests can pay online', 'Someone watching the kitchen order screen, or auto_accept switched on'],
+  manifest: {
+    name: 'Online ordering',
+    purpose: 'Pickup and table orders from the venue\'s own site: guests choose a time, pay online, and the docket appears on the kitchen screen. Orders are paced to what the kitchen can do.',
+    category: 'channels',
+    kind: 'channel',
+    needs: ['A menu with prices', 'Opening hours', 'A payment account connected (Square), so guests can pay online', 'Someone watching the kitchen order screen, or auto_accept switched on'],
+    reads: ['the menu', 'opening hours', 'guest records (a guest who orders is recorded)'],
+    writes: ['orders and payments', 'kitchen dockets', 'sales (each paid order enters the sales record)', 'order confirmations and ready messages'],
+    publicAddress: ({ siteOrigin }) => (siteOrigin ? `${siteOrigin}/order` : null),
+  },
   tables: ['orders', 'order_items', 'order_status_history', 'payments', 'refunds', 'kitchen_tickets', 'ticket_events'],
   configSchema: orderingConfig,
   configVersion: 1,

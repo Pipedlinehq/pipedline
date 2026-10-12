@@ -1,37 +1,52 @@
 @import 'tailwindcss';
 
 /*
- * Console and platform design tokens. Venue sites do not use these for brand: they take
- * their look from the venue's own brand tokens, emitted as CSS variables on the site layout.
+ * Console and platform design tokens (docs/CONSOLE_IA.md section 8): a warm neutral ground,
+ * near-black ink, one deep-green accent. The dark scheme and the faces are in
+ * (platform)/platform.css, so they reach the console and platform pages only. Venue sites do not
+ * use these for brand: they take their look from the venue's own brand tokens, emitted as CSS
+ * variables on the site layout.
+ *
+ * Every text colour here is 4.5:1 or better on the page, a card and a sunken panel, in both
+ * schemes (checked when the palette was chosen; the automated accessibility pass checks it again).
  */
 @theme {
+  /*
+   * The system stacks here. The console and platform pages load Pipedline's own faces (Fraunces,
+   * IBM Plex) from (platform)/platform.css and point these variables at them there; venue sites,
+   * which share this file for the utilities, keep the system stacks and their own brand fonts.
+   */
   --font-sans: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --font-display: Georgia, 'Times New Roman', serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
 
-  --color-page: #f9f9f7;
-  --color-surface: #fcfcfb;
-  --color-sunken: #f3f2ee;
-  --color-ink: #0b0b0b;
-  --color-ink-2: #52514e;
-  /* The quietest text. Still 4.5:1 or better on the page, a card and a sunken panel (it was 3.5:1). */
-  --color-ink-3: #6b6963;
-  --color-line: #e1e0d9;
-  --color-line-strong: #c3c2b7;
-  --color-accent: #1c5cab;
-  --color-accent-soft: #e8f1fd;
+  --radius-card: 0.625rem;
 
-  --color-good: #006300;
-  --color-good-soft: #e6f4e6;
-  --color-warn: #8a5a00;
-  --color-warn-soft: #fdf1d6;
-  --color-bad: #b3261e;
-  --color-bad-soft: #fbe9e7;
+  --color-page: #f5f2eb;
+  --color-surface: #fcfaf6;
+  --color-sunken: #ece7dc;
+  --color-ink: #17160f;
+  --color-ink-2: #4f4b42;
+  /* The quietest text. 4.7:1 on a sunken panel, 5.2:1 on the page. */
+  --color-ink-3: #6a655a;
+  --color-line: #ddd6c8;
+  --color-line-strong: #aea48f;
+  --color-accent: #0f5c4d;
+  --color-accent-soft: #dfeee8;
+
+  --color-good: #1f6a35;
+  --color-good-soft: #e1f0e3;
+  --color-warn: #7f5200;
+  --color-warn-soft: #f8ecd2;
+  --color-bad: #a8352b;
+  --color-bad-soft: #f8e4e0;
 
   /* Chart series: fixed order, validated for colour-vision deficiency (adjacent pairs). */
-  --color-series-1: #2a78d6;
-  --color-series-2: #eb6834;
-  --color-series-3: #1baf7a;
-  --color-series-4: #eda100;
-  --color-series-muted: #c3c2b7;
+  --color-series-1: #0f5c4d;
+  --color-series-2: #d9772b;
+  --color-series-3: #3a6fb0;
+  --color-series-4: #c9a227;
+  --color-series-muted: #b8af9c;
 }
 
 html {
@@ -46,7 +61,7 @@ body {
 
 /*
  * A link in the accent colour is always underlined. Inside a sentence of grey text the colour
- * alone does not tell it apart (1.2:1 against the words around it), and not everyone sees the hue.
+ * alone does not tell it apart, and not everyone sees the hue.
  */
 a.text-accent {
   text-decoration-line: underline;
@@ -59,7 +74,7 @@ a.text-accent {
 }
 
 dialog::backdrop {
-  background: rgb(11 11 11 / 0.4);
+  background: rgb(23 22 15 / 0.45);
 }
 
 @media (prefers-reduced-motion: reduce) {

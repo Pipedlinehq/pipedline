@@ -25,7 +25,7 @@ export default async function AuthorizeAssistant({ searchParams }: { searchParam
     return (
       <>
         <PageHeader title="Connect an assistant" />
-        <EmptyState title="Nothing was connected" action={<LinkButton href="/console/settings/assistants">Assistant access</LinkButton>}>
+        <EmptyState title="Nothing was connected" action={<LinkButton href="/console/assistant">Assistant</LinkButton>}>
           {review.error}
         </EmptyState>
       </>

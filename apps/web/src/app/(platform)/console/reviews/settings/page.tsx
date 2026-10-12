@@ -51,8 +51,8 @@ export default async function ReviewSettingsPage() {
                 Every machine-drafted reply is checked by fixed rules before anyone sees it for approval: no refunds or offers, no admissions of fault, no contact details, none of the phrases you ban below, and not longer than your limit. A draft that fails is kept as blocked and never queued.
               </p>
               <p>
-                <Link href="/console/settings/assistants" className="text-accent hover:underline">
-                  Change how far the agent may go in Settings → Assistant access
+                <Link href="/console/assistant" className="text-accent hover:underline">
+                  Change how far the agent may go under Assistant
                 </Link>
               </p>
             </div>
