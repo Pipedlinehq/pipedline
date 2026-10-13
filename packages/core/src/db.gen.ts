@@ -1341,6 +1341,8 @@ export interface Orders {
   source: Generated<OrderSource>;
   status: Generated<OrderStatus>;
   subtotal_cents: Generated<number>;
+  surcharge_cents: Generated<number>;
+  surcharges: Generated<Json>;
   table_label: string | null;
   table_session_id: string | null;
   tax_cents: Generated<number>;

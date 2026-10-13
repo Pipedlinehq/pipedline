@@ -27,9 +27,11 @@ import { getSessionAttribution, linkSessionToCustomer, trackInSession, type Sess
 import { grantConsent } from '../identity/consents';
 import { normaliseEmail, normalisePhone } from '../identity/normalise';
 import { type Acquisition, resolveCustomer } from '../identity/resolve';
+import { getOrg } from '../tenancy/orgs';
 import { getVenue } from '../tenancy/venues';
 import { type KitchenAxis, type LeavesAxis, type MoneyAxis, type OrderAxes, type OrderSource, KITCHEN_AXES, LEAVES_AXES, MONEY_AXES, ORDER_SOURCES, axesOf, channelOf, kitchenChannel, kitchenStatuses } from './axes';
-import { type OrderStatus, getDeliveryPricing, getTableOrdering, orderStatusHandlers } from './contract';
+import { type TotalsLine, surchargeNotices, totalsBreakdown } from './bill';
+import { type AppliedSurcharge, type OrderStatus, getDeliveryPricing, getTableOrdering, orderStatusHandlers } from './contract';
 import {
   orderAbandoned,
   orderAccepted,
@@ -45,7 +47,7 @@ import {
 } from './module';
 import { notifyGuest } from './notify';
 import { buildCart, cartInput } from './pricing';
-import { type OrderItemRow, type OrderRow, adjustmentsOf, firstName, frozenModifiers, loadItems, loadOrder, snapshot } from './rows';
+import { type OrderItemRow, type OrderRow, adjustmentsOf, firstName, frozenModifiers, isAutomatic, loadItems, loadOrder, snapshot, surchargesOf } from './rows';
 import { lockVenueSlots } from './slots';
 
 const WORKER = { kind: 'worker' as const, job: 'ordering' };
@@ -182,7 +184,15 @@ export interface OrderView {
   totalCents: number;
   refundedCents: number;
   currency: string;
-  adjustments: Array<{ adjuster: string; code: string; label: string; amountCents: number }>;
+  /** Every discount as its own line, with the offer's plain-words summary in `label`. `automatic`: applied by itself, no code typed. */
+  adjustments: Array<{ adjuster: string; code: string; label: string; amountCents: number; automatic: boolean }>;
+  /** The surcharges charged, each its own line, frozen when the order was priced. */
+  surcharges: AppliedSurcharge[];
+  surchargeCents: number;
+  /** The legal line for each surcharge, once each. */
+  surchargeNotices: string[];
+  /** The lines of the bill in reading order: subtotal, offers, surcharges, delivery, tip, tax, total, refunded. */
+  breakdown: TotalsLine[];
   customerId: string | null;
   customerName: string | null;
   /** Null for staff roles that do not deal with guests. */
@@ -238,7 +248,9 @@ const itemView = (i: OrderItemRow): OrderItemView => ({
   isAlcohol: i.is_alcohol,
 });
 
-function orderView(o: OrderRow, items: OrderItemRow[], refundedCents: number, contacts: boolean): OrderView {
+function orderView(o: OrderRow, items: OrderItemRow[], refundedCents: number, contacts: boolean, taxInclusive: boolean): OrderView {
+  const adjustments = adjustmentsOf(o);
+  const surcharges = surchargesOf(o);
   return {
     id: o.id,
     venueId: o.venue_id,
@@ -262,7 +274,11 @@ function orderView(o: OrderRow, items: OrderItemRow[], refundedCents: number, co
     totalCents: o.total_cents,
     refundedCents,
     currency: o.currency,
-    adjustments: adjustmentsOf(o).map((a) => ({ adjuster: a.adjuster, code: a.code, label: a.label, amountCents: a.amountCents })),
+    adjustments: adjustments.map((a) => ({ adjuster: a.adjuster, code: a.code, label: a.label, amountCents: a.amountCents, automatic: isAutomatic(a) })),
+    surcharges,
+    surchargeCents: o.surcharge_cents,
+    surchargeNotices: surchargeNotices(surcharges),
+    breakdown: totalsBreakdown({ channel: o.channel, subtotalCents: o.subtotal_cents, adjustments, surcharges, deliveryFeeCents: o.delivery_fee_cents, tipCents: o.tip_cents, taxCents: o.tax_cents, taxInclusive, totalCents: o.total_cents, refundedCents }),
     customerId: o.customer_id,
     customerName: o.customer_name,
     customerEmail: contacts ? o.customer_email : null,
@@ -295,6 +311,9 @@ function orderView(o: OrderRow, items: OrderItemRow[], refundedCents: number, co
   };
 }
 
+/** Whether the org's prices carry the tax inside them (Australia) or add it: decides the tax line's words. */
+const taxInclusiveOf = async (ctx: Ctx): Promise<boolean> => (await getOrg(ctx)).taxInclusive;
+
 async function refundedFor(ctx: Ctx, orderIds: string[]): Promise<Map<string, number>> {
   if (!orderIds.length) return new Map();
   const rows = await ctx.db
@@ -318,7 +337,7 @@ function seesContacts(ctx: Ctx, venueId: string): boolean {
 /** The view of an order for whoever just created or paid for it (they hold its token already). */
 export async function ownOrderView(ctx: Ctx, order: OrderRow): Promise<OrderView> {
   const refunded = await refundedFor(ctx, [order.id]);
-  return orderView(order, await loadItems(ctx, order.id), refunded.get(order.id) ?? 0, true);
+  return orderView(order, await loadItems(ctx, order.id), refunded.get(order.id) ?? 0, true, await taxInclusiveOf(ctx));
 }
 
 /** One order, for the console. Staff at the order's venue. */
@@ -327,7 +346,7 @@ export async function getOrder(ctx: Ctx, orderId: string): Promise<OrderView> {
   requireStaff(ctx, { venueId: order.venue_id, minRole: 'read_only' });
   await assertModule(ctx, order.venue_id, orderingModule);
   const refunded = await refundedFor(ctx, [order.id]);
-  return orderView(order, await loadItems(ctx, order.id), refunded.get(order.id) ?? 0, seesContacts(ctx, order.venue_id));
+  return orderView(order, await loadItems(ctx, order.id), refunded.get(order.id) ?? 0, seesContacts(ctx, order.venue_id), await taxInclusiveOf(ctx));
 }
 
 const STATUS = z.enum(['draft', 'pending_payment', 'placed', 'accepted', 'preparing', 'ready', 'completed', 'rejected', 'cancelled', 'refunded']);
@@ -428,7 +447,8 @@ export async function listOrders(ctx: Ctx, raw: z.input<typeof listOrdersInput>)
   const items = await ctx.db.selectFrom('order_items').selectAll().where('order_id', 'in', ids).orderBy('line_no').execute();
   const refunded = await refundedFor(ctx, ids);
   const contacts = seesContacts(ctx, input.venueId);
-  return orders.map((o) => orderView(o, items.filter((i) => i.order_id === o.id), refunded.get(o.id) ?? 0, contacts));
+  const taxInclusive = await taxInclusiveOf(ctx);
+  return orders.map((o) => orderView(o, items.filter((i) => i.order_id === o.id), refunded.get(o.id) ?? 0, contacts, taxInclusive));
 }
 
 export interface TrackedOrder {
@@ -449,13 +469,20 @@ export interface TrackedOrder {
   items: OrderItemView[];
   subtotalCents: number;
   discountCents: number;
-  adjustments: Array<{ label: string; amountCents: number }>;
+  /** Each offer as its own line, with its plain-words summary. */
+  adjustments: Array<{ label: string; amountCents: number; automatic: boolean }>;
+  /** Each surcharge as its own line, with the legal notice. */
+  surcharges: AppliedSurcharge[];
+  surchargeCents: number;
+  surchargeNotices: string[];
   taxCents: number;
   tipCents: number;
   deliveryFeeCents: number;
   totalCents: number;
   refundedCents: number;
   currency: string;
+  /** The bill's lines in reading order, as the receipt prints them. */
+  breakdown: TotalsLine[];
   rejectedReason: string | null;
   createdAt: Date;
   placedAt: Date | null;
@@ -488,6 +515,9 @@ export async function trackOrder(ctx: Ctx, token: string): Promise<TrackedOrder>
   if (!isInternal(ctx)) await rateLimit(ctx.app, `track:venue:${o.venue_id}`, { limit: 6000, windowSeconds: 600 });
   const venue = await getVenue(ctx, o.venue_id);
   const refunded = await refundedFor(ctx, [o.id]);
+  const adjustments = adjustmentsOf(o);
+  const surcharges = surchargesOf(o);
+  const refundedCents = refunded.get(o.id) ?? 0;
   return {
     reference: o.reference,
     venueId: o.venue_id,
@@ -505,13 +535,17 @@ export async function trackOrder(ctx: Ctx, token: string): Promise<TrackedOrder>
     items: (await loadItems(ctx, o.id)).map(itemView),
     subtotalCents: o.subtotal_cents,
     discountCents: o.discount_cents,
-    adjustments: adjustmentsOf(o).map((a) => ({ label: a.label, amountCents: a.amountCents })),
+    adjustments: adjustments.map((a) => ({ label: a.label, amountCents: a.amountCents, automatic: isAutomatic(a) })),
+    surcharges,
+    surchargeCents: o.surcharge_cents,
+    surchargeNotices: surchargeNotices(surcharges),
     taxCents: o.tax_cents,
     tipCents: o.tip_cents,
     deliveryFeeCents: o.delivery_fee_cents,
     totalCents: o.total_cents,
-    refundedCents: refunded.get(o.id) ?? 0,
+    refundedCents,
     currency: o.currency,
+    breakdown: totalsBreakdown({ channel: o.channel, subtotalCents: o.subtotal_cents, adjustments, surcharges, deliveryFeeCents: o.delivery_fee_cents, tipCents: o.tip_cents, taxCents: o.tax_cents, taxInclusive: await taxInclusiveOf(ctx), totalCents: o.total_cents, refundedCents }),
     rejectedReason: o.rejected_reason,
     createdAt: o.created_at,
     placedAt: o.placed_at,
@@ -771,12 +805,14 @@ export async function createOrder(ctx: Ctx, raw: z.input<typeof createOrderInput
       qr_code_id: table?.qrCodeId ?? null,
       subtotal_cents: cart.subtotalCents,
       discount_cents: cart.discountCents,
+      surcharge_cents: cart.surchargeCents,
+      surcharges: json(cart.surcharges),
       tax_cents: cart.taxCents,
       tip_cents: cart.tipCents,
       delivery_fee_cents: cart.deliveryFeeCents,
       total_cents: cart.totalCents,
       currency: cart.currency,
-      promo_code: cart.adjustments[0]?.code ?? null,
+      promo_code: cart.adjustments.find((a) => a.ref?.auto !== '1')?.code ?? null,
       adjustments: json(cart.adjustments),
       flags: [...new Set(input.flags)],
       customer_name: name,

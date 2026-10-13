@@ -4,6 +4,11 @@ import { type Ctx, hookList, keyedRegistry, register, slot } from '@ros/core';
  * How other modules take part in an order without the ordering module knowing about them.
  * This file is the contract between ordering and loyalty, offers and delivery; it holds types
  * and registries only. Ordering calls what is registered; it never imports those modules.
+ *
+ * One exception, by design (2026-10-13): the offers module's automatic offers, code
+ * combinability and surcharges are part of every total, not a code a guest may type, so
+ * `bill.ts` calls the functions offers exports for them (`automaticAdjustments`,
+ * `codeCombinesWith`, `applicableSurcharges`, `surchargeNotice`) and is the only file that does.
  */
 
 export interface DraftLine {
@@ -38,6 +43,24 @@ export interface Adjustment {
   amountCents: number;
   /** What the adjuster needs to commit or release later. Stored with the order. */
   ref: Record<string, string>;
+}
+
+/**
+ * A surcharge as it was charged on one order (the offers module's Sunday, public-holiday and
+ * named-day surcharges). Frozen onto the order with the figure, so a venue changing the rate
+ * later does not change what a guest was charged. Never a card surcharge: offers refuses one.
+ */
+export interface AppliedSurcharge {
+  id: string;
+  name: string;
+  /** 1000 = 10%. */
+  percentBp: number;
+  /** Why it applied: "Sunday", "Christmas Day", "Friday". */
+  reason: string;
+  /** The line the law asks for: "A surcharge of 10% applies on Sundays." */
+  notice: string;
+  /** What it added to this bill, in whole cents, worked out on the subtotal after discounts. */
+  amountCents: number;
 }
 
 export interface CheckoutAdjuster {

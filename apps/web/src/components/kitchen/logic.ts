@@ -26,6 +26,9 @@ export interface KTicket {
   readyAt: string | null;
   bumpedAt: string | null;
   items: Array<{ name: string; qty: number; modifiers: string[]; note: string | null; allergens: string[] }>;
+  /** The bill's lines (ordering.TotalsLine): the offers that came off and the surcharges that went on are printed at the foot of the ticket. */
+  bill?: Array<{ kind: string; label: string; amountCents: number; sign: 1 | -1; notice?: string }>;
+  currency?: string;
 }
 
 export interface KBoard {

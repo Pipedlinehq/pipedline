@@ -59,6 +59,69 @@ tests `packages/modules/test/orders-depth/`; browser `tests/e2e/63-console-order
 - Fix on the way: `trackingUrl` now builds `/order/t/<token>`, the path the site serves; it built
   `/order/<token>`, which had no page.
 
+## As built: the bill — channel prices, offers and surcharges on totals (2026-10-13)
+
+Closes the two gaps wave 2 left for ordering (`CONSOLE_IA.md` section 9: the Menu row's "passing
+the order's channel as the surface" and the Offers row's "has yet to call `automaticAdjustments`,
+`codeCombinesWith` and `applicableSurcharges`"). Code: `packages/modules/src/ordering/bill.ts`
+(new), `pricing.ts`, `drafts.ts`, `orders.ts`, `payment.ts`, `tickets.ts`, `templates.ts`;
+migration `db/migrations/0810_order_surcharges.sql` (`orders.surcharge_cents`, `orders.surcharges`
+jsonb); tests `packages/modules/test/orders-depth/bill.test.ts`; browser
+`tests/e2e/67-site-order-offers.e2e.ts`.
+
+- **Channel-aware pricing.** `buildCart` and `planDraftOrder` pass the order's own channel as the
+  menu surface (`pickup`, `delivery`, or `qr` for a table order), so `getOrderableItems` answers
+  with that channel's price list and its "where it shows": a delivery order is priced from the
+  delivery price, a pickup from the pickup price, and an item hidden from Pickup is not found for a
+  pickup (cart page, checkout and phone order alike) while a delivery still has it. The site's
+  order page, the guest plugin's `order_start` (channel `pickup`) and drafts all go through these
+  two functions, so nothing else had to change. Client-supplied prices are still dropped by the schema.
+- **The order of the bill** (`bill.ts`): subtotal − typed codes − automatic offers → + surcharges →
+  + delivery → tax → + tip = total. `bill.ts` is the one file in ordering that calls the offers
+  module directly (`automaticAdjustments`, `codeCombinesWith`, `applicableSurcharges`,
+  `surchargeNotice`), noted as the exception in `contract.ts`; everything in it applies only where
+  the offers plugin is switched on for the venue.
+- **Automatic offers.** After the code adjusters, `automaticOffers` asks offers for the offers that
+  apply to this guest, venue and moment, capped like a code's discount (whole cents, never more than
+  is left to come off, the delivery fee included for a delivery order). Worked out afresh at every
+  quote (`priceCart`) and again at `createOrder`, which never trusts the quote; the order freezes
+  the result in `adjustments` (`code` `auto:<offerId>`, `ref.auto = '1'`). At payment
+  `commitAdjustments` hands each to `offersAdjuster.commit`, which writes one `offer_uses` row with
+  `order_id` and the sale's `transaction_id`; a replayed payment is one use (the `once()` key and
+  the row's uniqueness). Each committed adjustment is audited `order.offer_applied` (`code`,
+  `label`, `amountCents`, `automatic`, `offerId`, `transactionId`); the offers module tracks
+  `offer.applied` / `offer.redeemed`. An offer with a per-guest limit is counted per `customer_id`,
+  which `createOrder` resolves from the signed-in guest or the email or phone given, before pricing.
+  `orders.promo_code` keeps the first typed code only.
+- **Codes together.** For each typed code, after its adjuster has priced it, `codeClash` asks
+  `codeCombinesWith` whether it may sit with the adjustments already accepted; a refusal is a
+  `rejectedCodes` entry with the offers module's words ("That offer cannot be used together with
+  Bill five.") and `createOrder` refuses the order with the same message. A loyalty reward counts as
+  a whole-bill offer that combines with nothing (offers' rule).
+- **Surcharges.** `surchargesFor(ctx, venueId, at, base)` with `at` the day the order is for (the
+  pickup slot, the wanted time of a phone order, else now) and `base` the subtotal after every
+  discount; each surcharge is `{ id, name, percentBp, reason, notice, amountCents }`, frozen onto
+  the order (`surcharges`, `surcharge_cents`) so a later change to the rate does not change what
+  was charged. Tax is worked out on subtotal − discounts + surcharges + delivery. Never a card
+  surcharge: the offers module refuses to create one. The till push lists each surcharge as a
+  service charge beside the delivery fee.
+- **Where each line appears.** `PricedCart`, `OrderView` and `TrackedOrder` gain `surcharges[]`,
+  `surchargeCents`, `surchargeNotices[]` and `breakdown: TotalsLine[]` (subtotal, each offer as its
+  own line with its plain-words summary, each surcharge as its own line with its notice, delivery,
+  tip, tax, total, refunded; `totalsBreakdown` is the one function every surface prints from);
+  `OrderView.adjustments[].automatic` says an offer applied by itself. The site's order page shows
+  the surcharge notice before anything is chosen (`CheckoutOptions.surchargeNotice`) and each line
+  as the cart is priced; the menu page prints the notice under the menu (`ordering.surchargeNotice`);
+  the receipt (`/order/t/<token>`), the console order page and the kitchen screen's ticket
+  (`TicketView.bill`) print the same lines, and the kitchen email docket gains `charges_line`.
+- **Left out.** A staff-built phone or function order carries the surcharge for its day but no
+  automatic offer (staff have no way to see or decline one; add it as a custom item). The ledger's
+  `CanonicalTransaction` has no surcharge field: the sale's `total_cents` includes the surcharge and
+  `subtotal_cents` is the food, as with the delivery fee. A "free delivery" automatic offer is
+  counted among the discounts the surcharge comes after (the surcharge base is the subtotal after
+  every adjustment). An automatic offer priced onto an order that ends before the order is paid is
+  honoured at the price the guest was shown, as a code is.
+
 ## 1. Menu model — shared with website, and later the POS
 
 ```sql
@@ -114,9 +177,9 @@ The model above is live with these additions (migration `0790_menu_depth.sql`; m
   public menu's `surface` is one of the five, or the older `online` (website) / `in_venue` (qr).
 - **Price lists per channel.** `menu_item_prices(item_id, channel, price_cents)`, one row per
   item and channel, over the item's own price. `getPublicMenu` and `getOrderableItems` return the
-  channel's price; `priceFor(ctx, itemId, channel)` answers one line. **Ordering must pass the
-  order's channel as the surface** (`pickup`, `delivery`, `qr`) for a channel price or a
-  per-channel hiding to reach the order; `pricing.ts` still passes `online`.
+  channel's price; `priceFor(ctx, itemId, channel)` answers one line. Ordering passes the order's
+  channel as the surface (`pickup`, `delivery`, `qr`) in `pricing.ts` and `drafts.ts` (2026-10-13,
+  "The bill" above), so a channel price and a per-channel hiding reach every order.
 - Assistant tools: `menu_list` (adds schedule, sold-out-until, channels, channel prices),
   `menu_set_availability` (the four `until` choices), `menu_schedule`, `menu_show_on`,
   `menu_set_channel_price`.

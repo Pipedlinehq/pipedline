@@ -224,14 +224,22 @@ export default async function OrderPage({ params }: { params: Promise<{ id: stri
             <dl className="space-y-1 border-t border-line px-5 py-4 text-sm">
               <Row label="Subtotal" value={money(o.subtotalCents, o.currency)} />
               {o.adjustments.map((a, n) => (
-                <Row key={n} label={a.label} value={money(a.amountCents, o.currency)} />
+                <Row key={n} label={`${a.label}${a.automatic ? ' (applied by itself)' : ''}`} value={`−${money(a.amountCents, o.currency)}`} testId="order-adjustment" />
               ))}
-              {o.discountCents ? <Row label="Discounts" value={`−${money(o.discountCents, o.currency)}`} /> : null}
+              {o.adjustments.length > 1 ? <Row label="Discounts" value={`−${money(o.discountCents, o.currency)}`} muted /> : null}
+              {o.surcharges.map((s) => (
+                <Row key={s.id} label={`${s.name} (${s.percentBp / 100}%, ${s.reason})`} value={money(s.amountCents, o.currency)} testId="order-surcharge" />
+              ))}
               {o.deliveryFeeCents ? <Row label="Delivery" value={money(o.deliveryFeeCents, o.currency)} /> : null}
               {o.tipCents ? <Row label="Tip" value={money(o.tipCents, o.currency)} /> : null}
               <Row label="Total" value={money(o.totalCents, o.currency)} strong />
               <Row label="Of which GST" value={money(o.taxCents, o.currency)} muted />
               {o.refundedCents ? <Row label="Refunded" value={`−${money(o.refundedCents, o.currency)}`} /> : null}
+              {o.surchargeNotices.map((n) => (
+                <p key={n} className="pt-2 text-xs text-ink-3" data-testid="order-surcharge-notice">
+                  {n}
+                </p>
+              ))}
             </dl>
           </Card>
 
@@ -356,9 +364,9 @@ export default async function OrderPage({ params }: { params: Promise<{ id: stri
   );
 }
 
-function Row({ label, value, strong, muted }: { label: string; value: string; strong?: boolean; muted?: boolean }) {
+function Row({ label, value, strong, muted, testId }: { label: string; value: string; strong?: boolean; muted?: boolean; testId?: string }) {
   return (
-    <div className={`flex justify-between gap-4 ${strong ? 'font-semibold text-ink' : muted ? 'text-ink-3' : 'text-ink-2'}`}>
+    <div className={`flex justify-between gap-4 ${strong ? 'font-semibold text-ink' : muted ? 'text-ink-3' : 'text-ink-2'}`} data-testid={testId}>
       <dt>{label}</dt>
       <dd className="tabular-nums">{value}</dd>
     </div>

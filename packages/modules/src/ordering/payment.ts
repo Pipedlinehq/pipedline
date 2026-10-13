@@ -33,6 +33,7 @@ import {
   track,
 } from '@ros/core';
 import type { Adjustment } from './contract';
+import { surchargeLabel, surchargeNotice } from './bill';
 import { trackInSession } from '../events/sessions';
 import { currentWordings } from '../identity/consents';
 import { recordTransaction } from '../ledger/record';
@@ -44,7 +45,7 @@ import { getCheckoutAdjuster } from './contract';
 import { orderFlagged, orderingModule, orderPaid, orderRefunded, paymentFailed, paymentReconciled, posPushed } from './module';
 import { notifyGuest, trackingUrl } from './notify';
 import { type OrderView, TERMINAL, loadOrderByToken, markRecoveredOrders, ownOrderView, transition } from './orders';
-import { type OrderItemRow, type OrderRow, type PaymentRow, adjustmentsOf, firstName, frozenModifiers, itemSummary, loadItems, loadOrder, whenLine } from './rows';
+import { type OrderItemRow, type OrderRow, type PaymentRow, adjustmentsOf, firstName, frozenModifiers, isAutomatic, itemSummary, loadItems, loadOrder, surchargesOf, whenLine } from './rows';
 import { createTicket, moveOrder } from './tickets';
 
 const WORKER = { kind: 'worker' as const, job: 'ordering' };
@@ -72,6 +73,8 @@ export interface CheckoutOptions {
   tipping: { enabled: boolean; presets: number[] };
   /** The exact words for each consent box, with the version to send back when it is ticked. */
   consentWordings: Array<{ purpose: string; version: string; body: string }>;
+  /** The legal line for the venue's surcharges, shown on the order page before anything is chosen: "A surcharge of 10% applies on Sundays." Null when there are none. */
+  surchargeNotice: string | null;
 }
 
 /** Public: no role check. Resolving the connection reads the secret store, so this is app-level. */
@@ -82,7 +85,7 @@ export async function getCheckoutOptions(app: App, actor: Actor, venueId: string
     actor.principal,
     async (ctx) => {
       const cfg = await assertModule(ctx, id, orderingModule);
-      return { cfg, conn: await findConnectionFor(ctx, 'payment', id), wordings: await currentWordings(ctx) };
+      return { cfg, conn: await findConnectionFor(ctx, 'payment', id), wordings: await currentWordings(ctx), notice: await surchargeNotice(ctx, id) };
     },
     tenantOpts(actor),
   );
@@ -97,6 +100,7 @@ export async function getCheckoutOptions(app: App, actor: Actor, venueId: string
     minOrderCents: r.cfg.min_order_cents,
     tipping: { enabled: r.cfg.tipping_enabled, presets: r.cfg.tip_presets },
     consentWordings: r.wordings,
+    surchargeNotice: r.notice,
   };
 }
 
@@ -477,7 +481,17 @@ async function commitAdjustments(ctx: Ctx, order: OrderRow): Promise<OrderRow> {
       await sql`rollback to savepoint ordering_adjuster_commit`.execute(ctx.db);
       if (!isAppError(e)) throw e;
       absorbed.push({ adjustment, reason: e.message });
+      continue;
     }
+    // A discount a venue could dispute is on the record with the sale it came off (the offers
+    // module tracks offer.applied / offer.redeemed as the event; this is the order's own audit).
+    await audit(ctx, {
+      action: 'order.offer_applied',
+      entityType: 'order',
+      entityId: order.id,
+      venueId: order.venue_id,
+      after: { reference: order.reference, code: adjustment.code, label: adjustment.label, amountCents: adjustment.amountCents, automatic: isAutomatic(adjustment), offerId: adjustment.ref?.offerId ?? null, transactionId: order.transaction_id },
+    });
   }
   if (!absorbed.length) return order;
   const cents = absorbed.reduce((sum, a) => sum + a.adjustment.amountCents, 0);
@@ -580,7 +594,8 @@ async function pushPlannedOrder(app: App, orgId: string, plan: PosPushPlan, opts
         totalCents: order.total_cents,
         paymentRef,
         discounts: adjustmentsOf(order).map((a) => ({ name: a.label, amountCents: a.amountCents })),
-        serviceCharges: order.delivery_fee_cents > 0 ? [{ name: 'Delivery', amountCents: order.delivery_fee_cents }] : [],
+        // A surcharge is a service charge to a till, as a delivery fee is; the till shows the same lines the docket does.
+        serviceCharges: [...surchargesOf(order).map((s) => ({ name: surchargeLabel(s), amountCents: s.amountCents })), ...(order.delivery_fee_cents > 0 ? [{ name: 'Delivery', amountCents: order.delivery_fee_cents }] : [])],
         tipCents: order.tip_cents,
         currency: order.currency,
       }),

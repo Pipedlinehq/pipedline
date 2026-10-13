@@ -25,6 +25,8 @@ export interface BlockContext {
   region: Region;
   /** The live menu of the scope's venue, when a menu block is on the page. */
   menu: menu.PublicMenu | null;
+  /** The legal line for the venue's surcharges, printed under the menu: "A surcharge of 10% applies on Sundays." */
+  surchargeNotice?: string | null;
   /** Active dietary filters from the address. */
   diet: string[];
   /** This page's own path, for the menu filter form. */
@@ -220,6 +222,11 @@ function MenuBlock({ block, ctx }: { block: Extract<Block, { type: 'menu' }>; ct
       ) : (
         <FullMenu data={ctx.menu} diet={ctx.diet} action={ctx.path} showPrices={showPrices} table={ctx.table} />
       )}
+      {ctx.menu && ctx.surchargeNotice ? (
+        <p className="text-sm" data-surcharge-notice>
+          {ctx.surchargeNotice}
+        </p>
+      ) : null}
     </div>
   );
 }

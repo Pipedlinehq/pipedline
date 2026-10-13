@@ -1,12 +1,26 @@
 import type { Selectable } from 'kysely';
 import { z } from 'zod';
-import { type Ctx, type DB, AppError, assertModule, isAppError, json, localParts, notFound, requireDevice, sql, staffOf, track } from '@ros/core';
+import { type Ctx, type DB, AppError, assertModule, formatMoney, isAppError, json, localParts, notFound, requireDevice, sql, staffOf, track } from '@ros/core';
 import { queueMessage } from '../comms/outbox';
+import { getOrg } from '../tenancy/orgs';
 import { getVenue } from '../tenancy/venues';
+import { type TotalsLine, surchargeNotices, totalsBreakdown } from './bill';
 import type { OrderStatus } from './contract';
 import { type OrderingConfig, orderingModule, ticketAcknowledged } from './module';
 import { TERMINAL, transition } from './orders';
-import { type OrderItemRow, type OrderRow, CHANNEL_LABEL, firstName, frozenModifiers, itemSummary, loadOrder, whenLine } from './rows';
+import { type OrderItemRow, type OrderRow, CHANNEL_LABEL, adjustmentsOf, firstName, frozenModifiers, itemSummary, loadOrder, surchargesOf, whenLine } from './rows';
+
+/** The offers and surcharges on an order, as a docket prints them: one line each with the figure, then each surcharge's legal line. */
+export function chargesText(order: Pick<OrderRow, 'adjustments' | 'surcharges' | 'currency' | 'channel' | 'subtotal_cents' | 'delivery_fee_cents' | 'tip_cents' | 'tax_cents' | 'total_cents'>): string {
+  const lines = billLines(order, true).filter((l) => l.kind === 'adjustment' || l.kind === 'surcharge');
+  if (!lines.length) return '';
+  return [...lines.map((l) => `${l.label}  ${l.sign < 0 ? '−' : ''}${formatMoney(l.amountCents, order.currency)}`), ...surchargeNotices(surchargesOf(order))].join('\n');
+}
+
+/** The bill's lines for a docket. The tax line's words depend on the org; a docket prints the figure either way. */
+function billLines(o: Pick<OrderRow, 'adjustments' | 'surcharges' | 'channel' | 'subtotal_cents' | 'delivery_fee_cents' | 'tip_cents' | 'tax_cents' | 'total_cents'>, taxInclusive: boolean): TotalsLine[] {
+  return totalsBreakdown({ channel: o.channel, subtotalCents: o.subtotal_cents, adjustments: adjustmentsOf(o), surcharges: surchargesOf(o), deliveryFeeCents: o.delivery_fee_cents, tipCents: o.tip_cents, taxCents: o.tax_cents, taxInclusive, totalCents: o.total_cents });
+}
 
 /**
  * The kitchen order screen's data (docs/ROADMAP.md Stage 2, docs/modules/ordering.md section 5).
@@ -164,6 +178,7 @@ export async function createTicket(ctx: Ctx, order: OrderRow, items: OrderItemRo
     when_line: whenLine(order, venue.timezone),
     allergen_line: allergens.length ? allergens.join(', ') : 'none listed',
     note_line: order.customer_note ? `Guest note (their words): "${order.customer_note}"` : '',
+    charges_line: chargesText(order),
   };
   if (cfg.kitchen_routing.includes('email') && cfg.kitchen_email) {
     await queueMessage(ctx, { templateKey: 'order.kitchen_new', channel: 'email', to: cfg.kitchen_email, idempotencyKey: `order:${order.id}:kitchen:email`, variables, venueId: order.venue_id });
@@ -237,13 +252,25 @@ export interface TicketView {
   readyAt: Date | null;
   bumpedAt: Date | null;
   items: Array<{ name: string; qty: number; modifiers: string[]; note: string | null; allergens: string[] }>;
+  /**
+   * The bill as the docket prints it: subtotal, each offer that came off as its own line, each
+   * surcharge as its own line with its legal notice, delivery, tip, tax, total. Figures the
+   * kitchen does not act on, kept at the foot of the ticket.
+   */
+  bill: TotalsLine[];
+  currency: string;
 }
 
 async function ticketViews(ctx: Ctx, tickets: TicketRow[]): Promise<TicketView[]> {
   if (!tickets.length) return [];
   const orderIds = tickets.map((t) => t.order_id);
-  const orders = await ctx.db.selectFrom('orders').select(['id', 'reference']).where('id', 'in', orderIds).execute();
+  const orders = await ctx.db
+    .selectFrom('orders')
+    .select(['id', 'reference', 'channel', 'currency', 'subtotal_cents', 'adjustments', 'surcharges', 'delivery_fee_cents', 'tip_cents', 'tax_cents', 'total_cents'])
+    .where('id', 'in', orderIds)
+    .execute();
   const items = await ctx.db.selectFrom('order_items').selectAll().where('order_id', 'in', orderIds).orderBy('line_no').execute();
+  const taxInclusive = (await getOrg(ctx)).taxInclusive;
   return tickets.map((t) => ({
     id: t.id,
     orderId: t.order_id,
@@ -266,6 +293,11 @@ async function ticketViews(ctx: Ctx, tickets: TicketRow[]): Promise<TicketView[]
     items: items
       .filter((i) => i.order_id === t.order_id)
       .map((i) => ({ name: i.name_snapshot, qty: i.qty, modifiers: frozenModifiers(i).map((m) => m.name), note: i.note, allergens: i.allergens })),
+    bill: (() => {
+      const o = orders.find((x) => x.id === t.order_id);
+      return o ? billLines(o, taxInclusive) : [];
+    })(),
+    currency: orders.find((o) => o.id === t.order_id)?.currency ?? 'AUD',
   }));
 }
 

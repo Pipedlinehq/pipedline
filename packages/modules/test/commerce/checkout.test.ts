@@ -361,7 +361,7 @@ describe('checkout and payment', () => {
     const burger = m.byName('Cheeseburger');
     const order = await placeOrder(t, diner(), venueId(), { lines: [{ menuItemId: burger.id, qty: 1 }], codes: ['tenoff'] });
     expect(order).toMatchObject({ subtotalCents: 2600, discountCents: 1000, totalCents: 1600, taxCents: 145 });
-    expect(order.adjustments).toEqual([{ adjuster: 'test-promo', code: 'TENOFF', label: 'Test promo: $10 off', amountCents: 1000 }]);
+    expect(order.adjustments).toEqual([{ adjuster: 'test-promo', code: 'TENOFF', label: 'Test promo: $10 off', amountCents: 1000, automatic: false }]);
 
     await pay(t, diner(), order, SIM_PAY_TOKENS.decline);
     expect(adjuster.committed.filter((c) => c.orderId === order.id)).toHaveLength(0);

@@ -72,7 +72,7 @@ No ports of its own. Messages go through `comms.queueMessage`; till sales arrive
 
 ## Known gaps
 
-- Ordering does not yet call `automaticAdjustments`, `codeCombinesWith` or `applicableSurcharges`: automatic offers apply at the till (by name) and are priced for checkout, but nothing adds them, or a surcharge, to an online total until ordering's `buildCart` does (see the bold notes above). Code-to-code combinability is likewise enforced only once ordering passes the accepted adjustments.
+- Ordering calls `automaticAdjustments`, `codeCombinesWith` and `applicableSurcharges` from `ordering/bill.ts` (since 2026-10-13): automatic offers, typed codes and surcharges are on every online total, re-priced at quote and at order creation, with one `offer_uses` row per paid order.
 - A `delivery` code offer is refused at `quote` (the draft carries no delivery fee); an automatic delivery offer is priced only when ordering passes `deliveryFeeCents`.
 - State public holidays are the venue's own `dates`; only the national days are built in, for 2026–2028.
 - The claim link in `offers.code` is empty until the org has a verified primary domain; `priceCents` is stored but nothing charges it.

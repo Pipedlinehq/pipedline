@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { menu, website } from '@ros/modules';
+import { menu, ordering, website } from '@ros/modules';
 import { type SiteScope, siteCall } from '@/lib/site-scope';
 import type { TableContext } from '@/lib/site-table';
 import { type Block, type BlockContext, BlockView, type Region, blockVisible } from './blocks';
@@ -30,6 +30,13 @@ export async function loadMenu(scope: SiteScope, table: TableContext | null): Pr
   return siteCall(scope.host, (ctx) => menu.getPublicMenu(ctx, venueId, { surface: table ? 'in_venue' : 'online' }));
 }
 
+/** The legal line for the venue's surcharges, printed under a menu (ordering adds them to every bill). */
+async function loadSurchargeNotice(scope: SiteScope): Promise<string | null> {
+  if (!scope.venue) return null;
+  const venueId = scope.venue.id;
+  return siteCall(scope.host, (ctx) => ordering.surchargeNotice(ctx, venueId));
+}
+
 /**
  * A page drawn in its skeleton. Each block's region comes from the website module's
  * `regionFor`, and each skeleton draws the five regions as its own composition: the same
@@ -38,6 +45,7 @@ export async function loadMenu(scope: SiteScope, table: TableContext | null): Pr
 export async function PageView({ scope, page, diet, path, table, menuData }: { scope: SiteScope; page: PageLike; diet: string[]; path: string; table: TableContext | null; menuData?: menu.PublicMenu | null }) {
   const skeleton = scope.view.skeleton.key;
   const live = menuData !== undefined ? menuData : page.blocks.some((b) => b.type === 'menu') ? await loadMenu(scope, table) : null;
+  const surchargeNotice = live ? await loadSurchargeNotice(scope) : null;
 
   // A page the skeleton does not name (a venue's own extra page) is composed like its home page.
   const layoutSlug = website.SKELETONS[skeleton].pages.some((pg) => pg.slug === page.slug) ? page.slug : 'home';
@@ -51,7 +59,7 @@ export async function PageView({ scope, page, diet, path, table, menuData }: { s
     // The first block of a type is anchored by its type (single-scroll navigation links to /#menu …).
     const anchor = seen.has(block.type) ? `b-${block.id}` : block.type;
     seen.add(block.type);
-    const ctx: BlockContext = { scope, pageSlug: page.slug, skeleton, region: regions[i]!, menu: live, diet, path, table, isH1: i === h1Index, anchor };
+    const ctx: BlockContext = { scope, pageSlug: page.slug, skeleton, region: regions[i]!, menu: live, surchargeNotice, diet, path, table, isH1: i === h1Index, anchor };
     return { key: `${block.id}-${i}`, block, region: regions[i]!, anchor, labelled: hasHeading(block), node: <BlockView block={block} ctx={ctx} /> };
   });
 

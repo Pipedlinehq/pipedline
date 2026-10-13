@@ -30,7 +30,8 @@ import { resolveCustomer } from '../identity/resolve';
 import { getOrderableItems } from '../menu/public';
 import { getOrg } from '../tenancy/orgs';
 import { getVenue } from '../tenancy/venues';
-import { orderStatusHandlers } from './contract';
+import { surchargesFor } from './bill';
+import { type AppliedSurcharge, orderStatusHandlers } from './contract';
 import { draftExpired, orderDrafted, orderMarkedPaid, orderingModule, payLinkSent } from './module';
 import { notifyGuest, trackingUrl } from './notify';
 import { type OrderView, expireUnpaidOrderJob, getOrder, transition } from './orders';
@@ -103,6 +104,9 @@ export interface DraftPlan {
   lines: Array<{ menuItemId: string | null; name: string; category: string | null; qty: number; unitPriceCents: number; lineTotalCents: number; modifiers: Array<{ id: string; group: string; name: string; price_delta_cents: number }>; note: string | null; allergens: string[]; isAlcohol: boolean; prepMinutes: number }>;
   itemCount: number;
   subtotalCents: number;
+  /** The surcharges in force for the day the order is wanted (else today), each its own line. No automatic offer is applied to a staff-built order. */
+  surcharges: AppliedSurcharge[];
+  surchargeCents: number;
   taxCents: number;
   totalCents: number;
   currency: string;
@@ -148,7 +152,8 @@ export async function planDraftOrder(ctx: Ctx, raw: z.input<typeof createDraftIn
     if (!phone) throw invalid('That phone number does not look right.');
   }
 
-  const items = await getOrderableItems(ctx, input.venueId, input.lines.map((l) => l.menuItemId), { surface: input.channel === 'dine-in-qr' ? 'in_venue' : 'online', at: wantedAt ?? now });
+  // Priced on the order's own channel (the pickup price list, or the QR menu's), as at checkout.
+  const items = await getOrderableItems(ctx, input.venueId, input.lines.map((l) => l.menuItemId), { surface: input.channel === 'dine-in-qr' ? 'qr' : 'pickup', at: wantedAt ?? now });
   const lines: DraftPlan['lines'] = [];
   for (const l of input.lines) {
     const item = items.get(l.menuItemId);
@@ -175,7 +180,11 @@ export async function planDraftOrder(ctx: Ctx, raw: z.input<typeof createDraftIn
     lines.push({ menuItemId: null, name: c.name, category: 'Custom', qty: c.qty, unitPriceCents: c.priceCents, lineTotalCents: c.priceCents * c.qty, modifiers: [], note: c.note?.length ? c.note : null, allergens: [], isAlcohol: false, prepMinutes: 0 });
   }
   const subtotal = lines.reduce((s, l) => s + l.lineTotalCents, 0);
-  const tax = org.taxInclusive ? taxIncluded(subtotal, org.taxRateBp) : taxOn(subtotal, org.taxRateBp);
+  // A Sunday or public-holiday surcharge is for the day the order is for, as on every bill.
+  const surcharges = await surchargesFor(ctx, input.venueId, wantedAt ?? now, subtotal);
+  const surcharge = surcharges.reduce((s, x) => s + x.amountCents, 0);
+  const taxable = subtotal + surcharge;
+  const tax = org.taxInclusive ? taxIncluded(taxable, org.taxRateBp) : taxOn(taxable, org.taxRateBp);
   return {
     venue: { id: venue.id, name: venue.name, timezone: venue.timezone },
     channel: input.channel,
@@ -183,8 +192,10 @@ export async function planDraftOrder(ctx: Ctx, raw: z.input<typeof createDraftIn
     lines,
     itemCount: lines.reduce((s, l) => s + l.qty, 0),
     subtotalCents: subtotal,
+    surcharges,
+    surchargeCents: surcharge,
     taxCents: tax,
-    totalCents: subtotal + (org.taxInclusive ? 0 : tax),
+    totalCents: taxable + (org.taxInclusive ? 0 : tax),
     currency: org.currency,
     customer: { name: input.customer.name, email, phone },
     note: input.note?.length ? input.note : null,
@@ -238,6 +249,8 @@ export async function createDraftOrder(ctx: Ctx, raw: z.input<typeof createDraft
       table_label: plan.tableLabel,
       subtotal_cents: plan.subtotalCents,
       discount_cents: 0,
+      surcharge_cents: plan.surchargeCents,
+      surcharges: json(plan.surcharges),
       tax_cents: plan.taxCents,
       tip_cents: 0,
       delivery_fee_cents: 0,

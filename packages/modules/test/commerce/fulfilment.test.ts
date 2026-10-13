@@ -157,7 +157,8 @@ describe('fulfilment: status, the kitchen screen, refunds', () => {
     expect(cancelled.body).toContain('refunded in full');
 
     const audits = await t.db.selectFrom('audit_log').select(['action', 'actor_kind']).where('entity_type', '=', 'order').where('entity_id', '=', order.id).orderBy('occurred_at').execute();
-    expect(audits.map((a) => a.action).sort()).toEqual(['order.refund_requested', 'order.refunded', 'order.rejected']);
+    // The code that came off the order is on its audit trail too (order.offer_applied, written when it was paid).
+    expect(audits.map((a) => a.action).sort()).toEqual(['order.offer_applied', 'order.refund_requested', 'order.refunded', 'order.rejected']);
     expect(await eventsFor(order.id)).toEqual(expect.arrayContaining(['order.rejected', 'order.refunded']));
   });
 

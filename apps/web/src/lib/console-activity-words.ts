@@ -160,6 +160,7 @@ const AUDIT_WORDS: Record<string, Words> = {
   'agent_oauth.agreed': () => 'signed an assistant in',
   'agent_oauth.declined': () => 'turned an assistant sign-in down',
   'agent.action_approved': () => 'approved something a hosted agent proposed',
+  'order.offer_applied': (e) => `applied ${named(e, 'offer')} to an order`,
   'offer.created': (e) => `created ${named(e, 'offer')}`,
   'offer.updated': (e) => `changed ${named(e, 'offer')}`,
   'offer.codes_issued': (e) => `issued ${num(rec(e.after).count) ?? 'some'} offer codes`,

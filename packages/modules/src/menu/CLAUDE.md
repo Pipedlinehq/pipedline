@@ -118,7 +118,7 @@ No ports or adapters. POS catalogue ids come in through `pos_catalog_id` on item
 
 ## Known gaps
 
-- Ordering (`ordering/pricing.ts`) passes `online` for pickup and delivery: channel prices and per-channel hiding do not yet reach a pickup or delivery order (see "The five channels"). The venue site's order page shows the website menu too (`apps/web/src/components/site/order-pages.tsx`).
+- Ordering (`ordering/pricing.ts`, `drafts.ts`) passes the order's channel (pickup / delivery / qr) since 2026-10-13, so channel prices and per-channel hiding reach every order.
 - Price lists are per channel only; per-venue overrides within a group, service-period pricing and a staged price rollout are not built.
 - A section's `shown_on` is a default for new items, never a filter on existing ones.
 - No POS-side menu sync.

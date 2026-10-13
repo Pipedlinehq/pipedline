@@ -48,6 +48,8 @@ export interface OrderAppProps {
   prompts: { receiptEmail: boolean; loyalty: boolean };
   /** A cart a guest's assistant built (`?cart=`), checked and priced again by the server, or why the link was refused. */
   assistantCart?: guestPlugin.OpenCartResult | null;
+  /** The legal line for the venue's surcharges ("A surcharge of 10% applies on Sundays."), shown before anything is chosen. */
+  surchargeNotice?: string | null;
 }
 
 const CONSENT_TITLES: Record<string, string> = {
@@ -563,6 +565,11 @@ export function OrderApp(props: OrderAppProps) {
           <p className="text-sm">
             {channel === 'dine-in-qr' ? `To your table${props.table?.label ? `: ${props.table.label}` : ''}, at ${venue.name}.` : channel === 'delivery' ? `Delivered from ${venue.name}.` : `Pickup from ${venue.name}.`}
           </p>
+          {props.surchargeNotice ? (
+            <p className="text-sm" data-surcharge-notice>
+              {props.surchargeNotice}
+            </p>
+          ) : null}
 
           {!loaded ? (
             <p className="text-sm">Loading your order…</p>
@@ -626,9 +633,17 @@ export function OrderApp(props: OrderAppProps) {
                 <dd>{money(priced.subtotalCents, currency)}</dd>
               </div>
               {priced.adjustments.map((a) => (
-                <div key={a.code} className="flex justify-between gap-3">
+                <div key={a.code} className="flex justify-between gap-3" data-adjustment={a.code} data-automatic={a.ref?.auto === '1' ? 'yes' : 'no'}>
                   <dt>{a.label}</dt>
                   <dd>−{money(a.amountCents, currency)}</dd>
+                </div>
+              ))}
+              {priced.surcharges.map((s) => (
+                <div key={s.id} className="flex justify-between gap-3" data-surcharge={s.id}>
+                  <dt>
+                    {s.name} ({s.percentBp / 100}%, {s.reason})
+                  </dt>
+                  <dd>{money(s.amountCents, currency)}</dd>
                 </div>
               ))}
               {channel === 'delivery' ? (
@@ -651,6 +666,11 @@ export function OrderApp(props: OrderAppProps) {
                 <dt>{priced.taxInclusive ? 'Includes GST of' : 'GST'}</dt>
                 <dd>{money(priced.taxCents, currency)}</dd>
               </div>
+              {priced.surchargeNotices.map((n) => (
+                <p key={n} className="text-sm" data-surcharge-notice>
+                  {n}
+                </p>
+              ))}
             </dl>
           ) : null}
 

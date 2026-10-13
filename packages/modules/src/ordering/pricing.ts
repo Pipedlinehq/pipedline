@@ -2,7 +2,8 @@ import { z } from 'zod';
 import { type Ctx, AppError, assertModule, formatMoney, isAppError, notFound, percentOf, taxIncluded, taxOn } from '@ros/core';
 import { getOrderableItems } from '../menu/public';
 import { getOrg } from '../tenancy/orgs';
-import { type Adjustment, type DraftOrder, type TableContext, checkoutAdjusters, getDeliveryPricing, getTableOrdering } from './contract';
+import { type TotalsLine, automaticOffers, codeClash, surchargeNotices, surchargesFor, totalsBreakdown } from './bill';
+import { type Adjustment, type AppliedSurcharge, type DraftOrder, type TableContext, checkoutAdjusters, getDeliveryPricing, getTableOrdering } from './contract';
 import { type OrderingConfig, orderingModule } from './module';
 import { type Timing, resolveTiming } from './slots';
 
@@ -11,6 +12,11 @@ import { type Timing, resolveTiming } from './slots';
  * every name, price, discount, tax and total below comes from the menu and the venue's config
  * (docs/THREAT_MODEL.md section 6, "Ordering abuse"). Unknown keys in the input, such as a
  * price the client made up, are dropped by the schema and never read.
+ *
+ * Each line is priced on the order's own menu channel (pickup, delivery, or the QR menu for a
+ * table): the channel's price list applies, and an item the venue hides from that channel is
+ * not found. Then, in this order: the codes the guest typed, the offers that apply by
+ * themselves, the surcharges in force for the day the order is for, delivery, tax, tip (bill.ts).
  */
 
 export const cartLineInput = z.object({
@@ -89,15 +95,23 @@ export interface PricedCart {
   /** The longest prep time in the cart. */
   prepMinutes: number;
   subtotalCents: number;
+  /** Every discount as its own line: the codes the guest typed, then the offers that applied by themselves (`code` auto:<offerId>). */
   adjustments: Adjustment[];
   /** Codes that gave nothing, with the reason in plain words. */
   rejectedCodes: Array<{ code: string; reason: string }>;
   discountCents: number;
+  /** The surcharges in force for the day the order is for, each its own line, priced on the subtotal after discounts. */
+  surcharges: AppliedSurcharge[];
+  surchargeCents: number;
+  /** The legal line for each surcharge, once each: "A surcharge of 10% applies on Sundays." */
+  surchargeNotices: string[];
   /** Tax contained in the total (inclusive pricing) or added to it (exclusive). */
   taxCents: number;
   tipCents: number;
   deliveryFeeCents: number;
   totalCents: number;
+  /** The lines of the bill in reading order, as every surface prints them. */
+  breakdown: TotalsLine[];
   timing: Timing | null;
   table: { label: string | null } | null;
   tipping: { enabled: boolean; presets: number[] };
@@ -141,8 +155,9 @@ export async function buildCart(ctx: Ctx, input: CartInput, opts: { customerId: 
 
   const slotStart = input.channel === 'dine-in-qr' || !input.slotStart ? null : new Date(input.slotStart);
   const menuAt = slotStart ?? now;
+  // The order's own channel is the menu surface: its price list, and its "where it shows".
   const items = await getOrderableItems(ctx, input.venueId, input.lines.map((l) => l.menuItemId), {
-    surface: input.channel === 'dine-in-qr' ? 'in_venue' : 'online',
+    surface: input.channel === 'dine-in-qr' ? 'qr' : input.channel,
     at: menuAt,
   });
 
@@ -256,6 +271,13 @@ export async function buildCart(ctx: Ctx, input: CartInput, opts: { customerId: 
       rejectedCodes.push({ code, reason });
       continue;
     }
+    // Two offers sit on one bill only when each allows the other (offers' rule): the adjuster
+    // that priced this code could not see the codes already accepted, so it is asked here.
+    const clash = await codeClash(ctx, code, adjustments);
+    if (clash) {
+      rejectedCodes.push({ code, reason: clash });
+      continue;
+    }
     // Whatever an adjuster says, a discount is whole cents, positive, and never more than is left.
     const amount = Math.min(Math.max(0, Math.trunc(found.amountCents)), remaining);
     if (amount <= 0) {
@@ -265,14 +287,14 @@ export async function buildCart(ctx: Ctx, input: CartInput, opts: { customerId: 
     remaining -= amount;
     adjustments.push({ adjuster: found.adjuster, code: found.code, label: found.label, amountCents: amount, ref: found.ref });
   }
-  const discount = subtotal - remaining;
+  const codeDiscount = subtotal - remaining;
 
   let deliveryFee = 0;
   if (input.channel === 'delivery') {
     const quote = await getDeliveryPricing()!.getQuote(ctx, {
       deliveryId: input.deliveryId!,
       venueId: input.venueId,
-      subtotalCents: subtotal - discount,
+      subtotalCents: subtotal - codeDiscount,
       containsAlcohol: lines.some((l) => l.isAlcohol),
     });
     // A stale quote is never charged: the guest checks the address again and gets a fresh one.
@@ -280,6 +302,17 @@ export async function buildCart(ctx: Ctx, input: CartInput, opts: { customerId: 
     else if (quote.issue) issues.push({ code: 'delivery', message: quote.issue });
     else deliveryFee = quote.customerFeeCents;
   }
+
+  // The offers that apply by themselves, after the codes: priced by the offers module for this
+  // guest, venue and moment, each its own line. Worked out afresh at every quote and at checkout;
+  // the uses are recorded only when the order is paid.
+  adjustments.push(...(await automaticOffers(ctx, draft, adjustments, { deliveryFeeCents: deliveryFee })));
+  const discount = adjustments.reduce((s, a) => s + a.amountCents, 0);
+
+  // Surcharges come after discounts and before tax, for the day the order is for, and never for
+  // paying by card (the offers module refuses to set one up).
+  const surcharges = await surchargesFor(ctx, input.venueId, menuAt, subtotal - discount);
+  const surcharge = surcharges.reduce((s, x) => s + x.amountCents, 0);
 
   let tip = input.tipCents;
   if (tip > 0 && !tipping.enabled) {
@@ -290,7 +323,7 @@ export async function buildCart(ctx: Ctx, input: CartInput, opts: { customerId: 
     tip = 0;
   }
 
-  const taxable = subtotal - discount + deliveryFee;
+  const taxable = subtotal - discount + surcharge + deliveryFee;
   const tax = org.taxInclusive ? taxIncluded(taxable, org.taxRateBp) : taxOn(taxable, org.taxRateBp);
   const total = taxable + (org.taxInclusive ? 0 : tax) + tip;
 
@@ -317,10 +350,14 @@ export async function buildCart(ctx: Ctx, input: CartInput, opts: { customerId: 
     adjustments,
     rejectedCodes,
     discountCents: discount,
+    surcharges,
+    surchargeCents: surcharge,
+    surchargeNotices: surchargeNotices(surcharges),
     taxCents: tax,
     tipCents: tip,
     deliveryFeeCents: deliveryFee,
     totalCents: total,
+    breakdown: totalsBreakdown({ channel: input.channel, subtotalCents: subtotal, adjustments, surcharges, deliveryFeeCents: deliveryFee, tipCents: tip, taxCents: tax, taxInclusive: org.taxInclusive, totalCents: total }),
     timing,
     table: tableContext ? { label: tableContext.tableLabel } : null,
     tipping,

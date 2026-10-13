@@ -124,6 +124,7 @@ export async function OrderRoute({ host, venueSlug, searchParams }: { host: stri
         initialCode={code}
         prompts={table?.prompts ?? { receiptEmail: true, loyalty: true }}
         assistantCart={assistantCart}
+        surchargeNotice={checkout.surchargeNotice}
       />
     </>
   );
@@ -279,10 +280,22 @@ export async function TrackRoute({ host, token }: { host: string; token: string 
           ))}
         </ul>
         <dl className="space-y-1 border-t pt-3 s-rule s-tabular">
+          <div className="flex justify-between">
+            <dt>Subtotal</dt>
+            <dd>{money(order.subtotalCents, order.currency)}</dd>
+          </div>
           {order.adjustments.map((a) => (
-            <div key={a.label} className="flex justify-between gap-3">
+            <div key={a.label} className="flex justify-between gap-3" data-adjustment data-automatic={a.automatic ? 'yes' : 'no'}>
               <dt>{a.label}</dt>
               <dd>−{money(a.amountCents, order.currency)}</dd>
+            </div>
+          ))}
+          {order.surcharges.map((s) => (
+            <div key={s.id} className="flex justify-between gap-3" data-surcharge={s.id}>
+              <dt>
+                {s.name} ({s.percentBp / 100}%, {s.reason})
+              </dt>
+              <dd>{money(s.amountCents, order.currency)}</dd>
             </div>
           ))}
           {order.channel === 'delivery' ? (
@@ -301,12 +314,23 @@ export async function TrackRoute({ host, token }: { host: string; token: string 
             <dt>Total</dt>
             <dd>{money(order.totalCents, order.currency)}</dd>
           </div>
+          {order.taxCents ? (
+            <div className="flex justify-between text-sm">
+              <dt>Includes GST of</dt>
+              <dd>{money(order.taxCents, order.currency)}</dd>
+            </div>
+          ) : null}
           {order.refundedCents ? (
             <div className="flex justify-between">
               <dt>Refunded</dt>
               <dd>{money(order.refundedCents, order.currency)}</dd>
             </div>
           ) : null}
+          {order.surchargeNotices.map((n) => (
+            <p key={n} className="text-sm" data-surcharge-notice>
+              {n}
+            </p>
+          ))}
         </dl>
       </section>
 

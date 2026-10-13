@@ -39,6 +39,7 @@ export {
 } from './drafts';
 
 export { type CartInput, type CartIssue, type CartIssueCode, type PricedCart, type PricedLine, type PricedModifier, cartInput, cartLineInput, priceCart } from './pricing';
+export { type Billed, type TotalsLine, type TotalsLineKind, surchargeLabel, surchargeNotice, surchargeNotices, totalsBreakdown } from './bill';
 export { type SlotBoard, type Timing, getPickupSlots, slotsInput } from './slots';
 export {
   type OrderItemView,

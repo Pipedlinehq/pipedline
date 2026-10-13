@@ -1,6 +1,6 @@
 import type { Selectable } from 'kysely';
 import { type Ctx, type DB, formatMoney, notFound } from '@ros/core';
-import type { Adjustment, OrderSnapshot } from './contract';
+import type { Adjustment, AppliedSurcharge, OrderSnapshot } from './contract';
 
 export type OrderRow = Selectable<DB['orders']>;
 export type OrderItemRow = Selectable<DB['order_items']>;
@@ -14,6 +14,10 @@ export interface FrozenModifier {
 
 export const frozenModifiers = (row: Pick<OrderItemRow, 'modifiers'>): FrozenModifier[] => (Array.isArray(row.modifiers) ? (row.modifiers as unknown as FrozenModifier[]) : []);
 export const adjustmentsOf = (row: Pick<OrderRow, 'adjustments'>): Adjustment[] => (Array.isArray(row.adjustments) ? (row.adjustments as unknown as Adjustment[]) : []);
+/** The surcharges frozen onto the order when it was priced (migration 0810). */
+export const surchargesOf = (row: Pick<OrderRow, 'surcharges'>): AppliedSurcharge[] => (Array.isArray(row.surcharges) ? (row.surcharges as unknown as AppliedSurcharge[]) : []);
+/** An adjustment an offer made by itself (offers' automaticAdjustments), as against a code the guest typed. */
+export const isAutomatic = (a: Pick<Adjustment, 'ref'>): boolean => a.ref?.auto === '1';
 
 /** Load an order in this org. An id from another org is not found (row-level security). */
 export async function loadOrder(ctx: Ctx, orderId: string, opts: { lock?: boolean } = {}): Promise<OrderRow> {

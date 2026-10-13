@@ -59,6 +59,38 @@ function TicketBody({ note, children }: { note: ReactNode; children: ReactNode }
 
 const LEVEL_ICON: Record<Shown['esc']['level'], string> = { ok: '●', soon: '▲', due: '■', over: '⚠', ready: '✓', done: '↩' };
 
+const cents = (n: number, currency: string) => new Intl.NumberFormat('en-AU', { style: 'currency', currency }).format(n / 100);
+
+/**
+ * The offers that came off the bill and the surcharges that went on it, each its own line, then
+ * each surcharge's legal line. Money the kitchen does not act on, so it sits at the foot of the
+ * items in smaller type; a ticket with neither shows nothing here.
+ */
+function TicketBill({ ticket }: { ticket: KTicket }) {
+  const lines = (ticket.bill ?? []).filter((l) => l.kind === 'adjustment' || l.kind === 'surcharge');
+  if (!lines.length) return null;
+  const currency = ticket.currency ?? 'AUD';
+  const notices = [...new Set(lines.map((l) => l.notice).filter((n): n is string => !!n))];
+  return (
+    <div className="mx-3 mt-3 border-t border-slate-700 pt-2 text-base text-slate-300" data-testid="ticket-bill">
+      {lines.map((l, n) => (
+        <p key={n} className="flex justify-between gap-3" data-bill-line={l.kind}>
+          <span className="min-w-0">{l.label}</span>
+          <span className="shrink-0 tabular-nums">
+            {l.sign < 0 ? '−' : ''}
+            {cents(l.amountCents, currency)}
+          </span>
+        </p>
+      ))}
+      {notices.map((n) => (
+        <p key={n} className="mt-1 text-sm italic text-slate-400" data-bill-notice>
+          {n}
+        </p>
+      ))}
+    </div>
+  );
+}
+
 /**
  * One ticket. Who it is for, what is on it, allergens where nobody can miss them, how late it is
  * in words and colour, and the one next step as the biggest thing on the card.
@@ -131,6 +163,7 @@ export function TicketCard({ shown, offline, onTap, onReject }: { shown: Shown; 
             {i.note ? <p className="pl-10 text-xl italic text-amber-200">Note: “{i.note}”</p> : null}
           </li>
         ))}
+        <TicketBill ticket={t} />
       </TicketBody>
 
       <div className="shrink-0 space-y-2 border-t-2 border-slate-700 p-3">

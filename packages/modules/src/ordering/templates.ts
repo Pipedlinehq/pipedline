@@ -183,6 +183,8 @@ const kitchen = z.object({
   allergen_line: z.string(),
   /** The guest's own words, quoted. */
   note_line: z.string().max(700),
+  /** The offers that came off and the surcharges that went on, one per line with the figure, then each surcharge's legal line; empty when there are none. */
+  charges_line: z.string().max(2000).default(''),
 });
 
 export const kitchenNewOrderEmail = defineTemplate({
@@ -191,7 +193,7 @@ export const kitchenNewOrderEmail = defineTemplate({
   kind: 'transactional',
   description: 'Tells the venue\'s kitchen address about a new paid order (kitchen_routing: email).',
   subject: 'New {{channel_label}} order {{reference}}',
-  body: 'New {{channel_label}} order {{reference}} at {{venue_name}}.\n\n{{summary}}\n\nAllergens: {{allergen_line}}\n{{when_line}}\n{{note_line}}',
+  body: 'New {{channel_label}} order {{reference}} at {{venue_name}}.\n\n{{summary}}\n\nAllergens: {{allergen_line}}\n{{when_line}}\n{{note_line}}\n{{charges_line}}',
   variables: kitchen,
 });
 
